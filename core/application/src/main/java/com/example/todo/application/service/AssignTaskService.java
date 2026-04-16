@@ -1,6 +1,8 @@
 package com.example.todo.application.service;
 
 import com.example.todo.application.command.AssignTaskCommand;
+import com.example.todo.application.exception.ApplicationValidationException;
+import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.AssignTaskUseCase;
 import com.example.todo.application.port.out.LoadTaskPort;
 import com.example.todo.application.port.out.LoadUserPort;
@@ -32,11 +34,18 @@ public class AssignTaskService implements AssignTaskUseCase {
     public Task assignTask(AssignTaskCommand command) {
         Objects.requireNonNull(command, "command must not be null");
 
+        if (command.taskId() == null) {
+            throw new ApplicationValidationException("taskId must not be null");
+        }
+        if (command.assigneeId() == null) {
+            throw new ApplicationValidationException("assigneeId must not be null");
+        }
+
         Task task = loadTaskPort.loadById(command.taskId())
-                .orElseThrow(() -> new IllegalArgumentException("task not found: " + command.taskId()));
+                .orElseThrow(() -> new ResourceNotFoundException("task not found: " + command.taskId()));
 
         if (!loadUserPort.existsById(command.assigneeId())) {
-            throw new IllegalArgumentException("assignee not found: " + command.assigneeId());
+            throw new ResourceNotFoundException("assignee not found: " + command.assigneeId());
         }
 
         task.assignTo(command.assigneeId(), clock.instant());

@@ -3,8 +3,6 @@ package com.example.todo.adapter.out.persistence.mapper;
 import com.example.todo.adapter.out.persistence.entity.TaskJpaEntity;
 import com.example.todo.domain.task.Task;
 import com.example.todo.domain.task.TaskId;
-import com.example.todo.domain.task.TaskPriority;
-import com.example.todo.domain.task.TaskStatus;
 import com.example.todo.domain.user.UserId;
 
 public final class TaskPersistenceMapper {
@@ -19,8 +17,8 @@ public final class TaskPersistenceMapper {
         entity.setAssigneeId(task.getAssigneeId().value());
         entity.setTitle(task.getTitle());
         entity.setDescription(task.getDescription());
-        entity.setStatus(task.getStatus().name());
-        entity.setPriority(task.getPriority().name());
+        entity.setStatus(task.getStatus());
+        entity.setPriority(task.getPriority());
         entity.setDueAt(task.getDueAt());
         entity.setCreatedAt(task.getCreatedAt());
         entity.setUpdatedAt(task.getUpdatedAt());
@@ -28,14 +26,14 @@ public final class TaskPersistenceMapper {
     }
 
     public static Task toDomain(TaskJpaEntity entity) {
-        return new Task(
+        return Task.restore(
                 new TaskId(entity.getId()),
                 new UserId(entity.getAuthorId()),
                 new UserId(entity.getAssigneeId()),
                 entity.getTitle(),
                 entity.getDescription(),
-                TaskStatus.valueOf(entity.getStatus()),
-                TaskPriority.valueOf(entity.getPriority()),
+                entity.getStatus(),
+                entity.getPriority(),
                 entity.getDueAt(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()

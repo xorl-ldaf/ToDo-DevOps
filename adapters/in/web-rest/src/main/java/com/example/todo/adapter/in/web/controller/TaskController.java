@@ -4,6 +4,7 @@ import com.example.todo.adapter.in.web.dto.AssignTaskRequest;
 import com.example.todo.adapter.in.web.dto.CreateTaskRequest;
 import com.example.todo.adapter.in.web.dto.TaskResponse;
 import com.example.todo.adapter.in.web.mapper.WebApiMapper;
+import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.AssignTaskUseCase;
 import com.example.todo.application.port.in.CreateTaskUseCase;
 import com.example.todo.application.port.in.GetTaskUseCase;
@@ -15,7 +16,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @RestController
@@ -60,7 +60,7 @@ public class TaskController {
     public TaskResponse getTask(@PathVariable UUID taskId) {
         return getTaskUseCase.getTask(new TaskId(taskId))
                 .map(WebApiMapper::toResponse)
-                .orElseThrow(() -> new NoSuchElementException("task not found: " + taskId));
+                .orElseThrow(() -> new ResourceNotFoundException("task not found: " + taskId));
     }
 
     @PatchMapping("/{taskId}/assign")

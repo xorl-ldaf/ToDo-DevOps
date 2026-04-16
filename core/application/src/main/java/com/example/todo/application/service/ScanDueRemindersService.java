@@ -30,6 +30,7 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
         Objects.requireNonNull(now, "now must not be null");
 
         List<Reminder> reminders = loadDueRemindersPort.loadDueReminders(now);
+        int publishedCount = 0;
 
         for (Reminder reminder : reminders) {
             if (!reminder.isDueAt(now)) {
@@ -39,8 +40,9 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
             publishReminderEventPort.publish(reminder);
             reminder.markPublished(now);
             saveReminderPort.save(reminder);
+            publishedCount++;
         }
 
-        return reminders.size();
+        return publishedCount;
     }
 }

@@ -1,17 +1,14 @@
 package com.example.todo.application.service;
 
 import com.example.todo.application.command.CreateTaskCommand;
+import com.example.todo.application.exception.ApplicationValidationException;
+import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.CreateTaskUseCase;
 import com.example.todo.application.port.out.LoadUserPort;
 import com.example.todo.application.port.out.SaveTaskPort;
 import com.example.todo.domain.task.Task;
-import com.example.todo.domain.task.TaskId;
-import com.example.todo.domain.task.TaskPriority;
-import com.example.todo.domain.task.TaskStatus;
-import com.example.todo.domain.user.UserId;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.util.Objects;
 
 public class CreateTaskService implements CreateTaskUseCase {
@@ -33,29 +30,26 @@ public class CreateTaskService implements CreateTaskUseCase {
     public Task createTask(CreateTaskCommand command) {
         Objects.requireNonNull(command, "command must not be null");
 
+        if (command.authorId() == null) {
+            throw new ApplicationValidationException("authorId must not be null");
+        }
+
         if (!loadUserPort.existsById(command.authorId())) {
-            throw new IllegalArgumentException("author not found: " + command.authorId());
+            throw new ResourceNotFoundException("author not found: " + command.authorId());
         }
 
-        UserId actualAssigneeId = command.assigneeId() == null ? command.authorId() : command.assigneeId();
-
-        if (!loadUserPort.existsById(actualAssigneeId)) {
-            throw new IllegalArgumentException("assignee not found: " + actualAssigneeId);
+        if (command.assigneeId() != null && !loadUserPort.existsById(command.assigneeId())) {
+            throw new ResourceNotFoundException("assignee not found: " + command.assigneeId());
         }
 
-        Instant now = clock.instant();
-
-        Task task = new Task(
-                TaskId.newId(),
+        Task task = Task.createNew(
                 command.authorId(),
-                actualAssigneeId,
+                command.assigneeId(),
                 command.title(),
                 command.description(),
-                TaskStatus.OPEN,
-                command.priority() == null ? TaskPriority.MEDIUM : command.priority(),
+                command.priority(),
                 command.dueAt(),
-                now,
-                now
+                clock.instant()
         );
 
         return saveTaskPort.save(task);

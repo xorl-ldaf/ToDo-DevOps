@@ -3,7 +3,6 @@ package com.example.todo.adapter.out.persistence.mapper;
 import com.example.todo.adapter.out.persistence.entity.ReminderJpaEntity;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderId;
-import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.task.TaskId;
 
 public final class ReminderPersistenceMapper {
@@ -16,7 +15,7 @@ public final class ReminderPersistenceMapper {
         entity.setId(reminder.getId().value());
         entity.setTaskId(reminder.getTaskId().value());
         entity.setRemindAt(reminder.getRemindAt());
-        entity.setStatus(reminder.getStatus().name());
+        entity.setStatus(reminder.getStatus());
         entity.setCreatedAt(reminder.getCreatedAt());
         entity.setUpdatedAt(reminder.getUpdatedAt());
         entity.setSentAt(reminder.getSentAt());
@@ -24,11 +23,11 @@ public final class ReminderPersistenceMapper {
     }
 
     public static Reminder toDomain(ReminderJpaEntity entity) {
-        return new Reminder(
+        return Reminder.restore(
                 new ReminderId(entity.getId()),
                 new TaskId(entity.getTaskId()),
                 entity.getRemindAt(),
-                ReminderStatus.valueOf(entity.getStatus()),
+                entity.getStatus(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 entity.getSentAt()

@@ -1,10 +1,11 @@
 package com.example.todo.domain.reminder;
 
+import com.example.todo.domain.shared.exception.DomainValidationException;
+import com.example.todo.domain.shared.exception.InvalidStateTransitionException;
 import com.example.todo.domain.task.TaskId;
 import lombok.Getter;
 
 import java.time.Instant;
-import java.util.Objects;
 
 @Getter
 public class Reminder {
@@ -16,7 +17,7 @@ public class Reminder {
     private Instant updatedAt;
     private Instant sentAt;
 
-    public Reminder(
+    private Reminder(
             ReminderId id,
             TaskId taskId,
             Instant remindAt,
@@ -25,31 +26,94 @@ public class Reminder {
             Instant updatedAt,
             Instant sentAt
     ) {
-        this.id = Objects.requireNonNull(id, "id must not be null");
-        this.taskId = Objects.requireNonNull(taskId, "taskId must not be null");
-        this.remindAt = Objects.requireNonNull(remindAt, "remindAt must not be null");
-        this.status = Objects.requireNonNull(status, "status must not be null");
-        this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
-        this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
+        this.id = requireNonNull(id, "id");
+        this.taskId = requireNonNull(taskId, "taskId");
+        this.remindAt = requireNonNull(remindAt, "remindAt");
+        this.status = requireNonNull(status, "status");
+        this.createdAt = requireNonNull(createdAt, "createdAt");
+        this.updatedAt = requireNonNull(updatedAt, "updatedAt");
         this.sentAt = sentAt;
 
         if (updatedAt.isBefore(createdAt)) {
-            throw new IllegalArgumentException("updatedAt must not be before createdAt");
+            throw new DomainValidationException("updatedAt must not be before createdAt");
+        }
+        if (sentAt != null && sentAt.isBefore(createdAt)) {
+            throw new DomainValidationException("sentAt must not be before createdAt");
         }
     }
 
+    public static Reminder schedule(TaskId taskId, Instant remindAt, Instant now) {
+        Instant createdAt = requireNonNull(now, "now");
+        Instant actualRemindAt = requireNonNull(remindAt, "remindAt");
+
+        if (actualRemindAt.isBefore(createdAt)) {
+            throw new DomainValidationException("remindAt must not be in the past");
+        }
+
+        return new Reminder(
+                ReminderId.newId(),
+                taskId,
+                actualRemindAt,
+                ReminderStatus.PENDING,
+                createdAt,
+                createdAt,
+                null
+        );
+    }
+
+    public static Reminder restore(
+            ReminderId id,
+            TaskId taskId,
+            Instant remindAt,
+            ReminderStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant sentAt
+    ) {
+        return new Reminder(
+                id,
+                taskId,
+                remindAt,
+                status,
+                createdAt,
+                updatedAt,
+                sentAt
+        );
+    }
+
     public boolean isDueAt(Instant moment) {
-        return status == ReminderStatus.PENDING && !remindAt.isAfter(moment);
+        Instant actualMoment = requireNonNull(moment, "moment");
+        return status == ReminderStatus.PENDING && !remindAt.isAfter(actualMoment);
     }
 
     public void markPublished(Instant now) {
+        if (this.status != ReminderStatus.PENDING) {
+            throw new InvalidStateTransitionException(
+                    "reminder cannot be published from status: " + this.status
+            );
+        }
+
         this.status = ReminderStatus.PUBLISHED;
-        this.updatedAt = Objects.requireNonNull(now, "now must not be null");
+        this.updatedAt = requireNonNull(now, "now");
     }
 
     public void markSent(Instant now) {
+        if (this.status != ReminderStatus.PUBLISHED) {
+            throw new InvalidStateTransitionException(
+                    "reminder cannot be marked as sent from status: " + this.status
+            );
+        }
+
+        Instant actualNow = requireNonNull(now, "now");
         this.status = ReminderStatus.SENT;
-        this.sentAt = Objects.requireNonNull(now, "now must not be null");
-        this.updatedAt = now;
+        this.sentAt = actualNow;
+        this.updatedAt = actualNow;
+    }
+
+    private static <T> T requireNonNull(T value, String fieldName) {
+        if (value == null) {
+            throw new DomainValidationException(fieldName + " must not be null");
+        }
+        return value;
     }
 }

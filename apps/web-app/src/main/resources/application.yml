@@ -1,12 +1,17 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/todo
-    username: postgres
-    password: postgres
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/todo}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
 management:
   endpoints:

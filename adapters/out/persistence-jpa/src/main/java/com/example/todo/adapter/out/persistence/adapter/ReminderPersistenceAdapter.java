@@ -23,7 +23,7 @@ public class ReminderPersistenceAdapter implements LoadDueRemindersPort, SaveRem
 
     @Override
     public List<Reminder> loadDueReminders(Instant now) {
-        return repository.findByStatusAndRemindAtLessThanEqual(ReminderStatus.PENDING.name(), now)
+        return repository.findByStatusAndRemindAtLessThanEqual(ReminderStatus.PENDING, now)
                 .stream()
                 .map(ReminderPersistenceMapper::toDomain)
                 .toList();

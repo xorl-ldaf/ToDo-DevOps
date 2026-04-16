@@ -1,8 +1,5 @@
 package com.example.todo.adapter.in.web.dto;
 
-import com.example.todo.domain.task.TaskPriority;
-import com.example.todo.domain.task.TaskStatus;
-
 import java.time.Instant;
 import java.util.UUID;
 
@@ -12,8 +9,8 @@ public record TaskResponse(
         UUID assigneeId,
         String title,
         String description,
-        TaskStatus status,
-        TaskPriority priority,
+        TaskStatusDto status,
+        TaskPriorityDto priority,
         Instant dueAt,
         Instant createdAt,
         Instant updatedAt

@@ -1,6 +1,5 @@
 package com.example.todo.adapter.in.web.dto;
 
-import com.example.todo.domain.task.TaskPriority;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -12,7 +11,7 @@ public record CreateTaskRequest(
         String description,
         @NotNull UUID authorId,
         UUID assigneeId,
-        TaskPriority priority,
+        TaskPriorityDto priority,
         Instant dueAt
 ) {
 }

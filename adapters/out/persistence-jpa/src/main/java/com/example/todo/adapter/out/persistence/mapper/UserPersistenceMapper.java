@@ -24,7 +24,7 @@ public final class UserPersistenceMapper {
     }
 
     public static User toDomain(UserJpaEntity entity) {
-        return new User(
+        return User.restore(
                 new UserId(entity.getId()),
                 entity.getUsername(),
                 entity.getDisplayName(),

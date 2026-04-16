@@ -1,14 +1,32 @@
 package com.example.todo.config;
 
 import com.example.todo.adapter.out.persistence.adapter.ReminderPersistenceAdapter;
-
 import com.example.todo.adapter.out.persistence.adapter.TaskPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.adapter.UserPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.repository.SpringDataReminderRepository;
 import com.example.todo.adapter.out.persistence.repository.SpringDataTaskRepository;
 import com.example.todo.adapter.out.persistence.repository.SpringDataUserRepository;
-import com.example.todo.application.port.in.*;
-import com.example.todo.application.service.*;
+import com.example.todo.application.port.in.AssignTaskUseCase;
+import com.example.todo.application.port.in.CreateReminderUseCase;
+import com.example.todo.application.port.in.CreateTaskUseCase;
+import com.example.todo.application.port.in.CreateUserUseCase;
+import com.example.todo.application.port.in.GetTaskUseCase;
+import com.example.todo.application.port.in.GetUserUseCase;
+import com.example.todo.application.port.in.ListTaskRemindersUseCase;
+import com.example.todo.application.port.in.ListTasksUseCase;
+import com.example.todo.application.port.in.ListUsersUseCase;
+import com.example.todo.application.port.in.ScanDueRemindersUseCase;
+import com.example.todo.application.port.out.PublishReminderEventPort;
+import com.example.todo.application.service.AssignTaskService;
+import com.example.todo.application.service.CreateReminderService;
+import com.example.todo.application.service.CreateTaskService;
+import com.example.todo.application.service.CreateUserService;
+import com.example.todo.application.service.GetTaskService;
+import com.example.todo.application.service.GetUserService;
+import com.example.todo.application.service.ListTaskRemindersService;
+import com.example.todo.application.service.ListTasksService;
+import com.example.todo.application.service.ListUsersService;
+import com.example.todo.application.service.ScanDueRemindersService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,6 +38,11 @@ public class BeanConfig {
     @Bean
     Clock clock() {
         return Clock.systemUTC();
+    }
+
+    @Bean
+    PublishReminderEventPort publishReminderEventPort() {
+        return new NoOpReminderEventPublisher();
     }
 
     @Bean
@@ -35,6 +58,14 @@ public class BeanConfig {
     @Bean
     ReminderPersistenceAdapter reminderPersistenceAdapter(SpringDataReminderRepository repository) {
         return new ReminderPersistenceAdapter(repository);
+    }
+
+    @Bean
+    CreateUserUseCase createUserUseCase(
+            UserPersistenceAdapter userAdapter,
+            Clock clock
+    ) {
+        return new CreateUserService(userAdapter, userAdapter, clock);
     }
 
     @Bean
@@ -57,11 +88,12 @@ public class BeanConfig {
 
     @Bean
     ScanDueRemindersUseCase scanDueRemindersUseCase(
-            ReminderPersistenceAdapter reminderAdapter
+            ReminderPersistenceAdapter reminderAdapter,
+            PublishReminderEventPort publishReminderEventPort
     ) {
         return new ScanDueRemindersService(
                 reminderAdapter,
-                reminder -> { },
+                publishReminderEventPort,
                 reminderAdapter
         );
     }
@@ -96,7 +128,10 @@ public class BeanConfig {
     }
 
     @Bean
-    ListTaskRemindersUseCase listTaskRemindersUseCase(ReminderPersistenceAdapter reminderAdapter) {
-        return new ListTaskRemindersService(reminderAdapter);
+    ListTaskRemindersUseCase listTaskRemindersUseCase(
+            TaskPersistenceAdapter taskAdapter,
+            ReminderPersistenceAdapter reminderAdapter
+    ) {
+        return new ListTaskRemindersService(taskAdapter, reminderAdapter);
     }
 }
