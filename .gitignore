@@ -1,5 +1,13 @@
-/.idea/
-/.gradle/
-/build/
 .env
 .env.example
+.gradle/
+build/
+**/build/
+
+.idea/
+*.iml
+out/
+
+*.log
+
+.DS_Store
