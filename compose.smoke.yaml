@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: todo-smoke-db
+
+    environment:
+      POSTGRES_DB: todo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d todo"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  app:
+    image: ${APP_IMAGE:-todo-smoke-placeholder:latest}
+    container_name: todo-smoke-app
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://db:5432/todo
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+
+    ports:
+      - "18080:8080"
