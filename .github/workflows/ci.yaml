@@ -114,6 +114,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Store digest reference for signing
+        if: github.event_name != 'pull_request'
         id: digest_ref
         run: echo "value=${IMAGE_NAME}@${{ steps.docker_build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
@@ -172,27 +173,35 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Trivy vulnerability scan (SARIF)
-        uses: aquasecurity/trivy-action@v0.33.1
+      - name: Install safe Trivy
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
         with:
+          version: v0.69.3
+          cache: true
+
+      - name: Run Trivy vulnerability scan (SARIF)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          skip-setup-trivy: true
           image-ref: ${{ needs.docker-image.outputs.smoke_image }}
           format: sarif
           output: trivy-results.sarif
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
       - name: Upload Trivy SARIF to GitHub Security
-        if: always()
-        continue-on-error: true
+        if: ${{ !cancelled() && hashFiles('trivy-results.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
           category: trivy-image-scan
 
       - name: Generate CycloneDX SBOM
-        uses: aquasecurity/trivy-action@v0.33.1
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
+          skip-setup-trivy: true
           image-ref: ${{ needs.docker-image.outputs.smoke_image }}
           format: cyclonedx
           output: trivy-image-sbom.cdx.json
@@ -203,6 +212,17 @@ jobs:
           name: trivy-image-sbom
           path: trivy-image-sbom.cdx.json
           if-no-files-found: error
+
+      - name: Fail pipeline on Trivy vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          skip-setup-trivy: true
+          image-ref: ${{ needs.docker-image.outputs.smoke_image }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
 
   sign-image:
     name: Sign published image with Cosign
