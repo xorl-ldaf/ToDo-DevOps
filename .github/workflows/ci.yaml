@@ -167,7 +167,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scan (SARIF)
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/todo-devops:${{ github.sha }}
           format: sarif
@@ -199,7 +199,7 @@ jobs:
           if-no-files-found: error
 
       - name: Fail pipeline on Trivy vulnerabilities
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/todo-devops:${{ github.sha }}
           format: table
