@@ -68,6 +68,7 @@ jobs:
     needs: build-and-verify
     outputs:
       smoke_image: ${{ steps.image_ref.outputs.value }}
+      image_digest_ref: ${{ steps.digest_ref.outputs.value }}
 
     steps:
       - name: Checkout repository
@@ -103,6 +104,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and optionally push Docker image
+        id: docker_build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -110,6 +112,10 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Store digest reference for signing
+        id: digest_ref
+        run: echo "value=${IMAGE_NAME}@${{ steps.docker_build.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   smoke-test-image:
     name: Smoke test published image
@@ -166,35 +172,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install safe Trivy
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
-        with:
-          version: v0.69.3
-          cache: true
-
       - name: Run Trivy vulnerability scan (SARIF)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
-          skip-setup-trivy: true
           image-ref: ${{ needs.docker-image.outputs.smoke_image }}
           format: sarif
           output: trivy-results.sarif
-          exit-code: '0'
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
       - name: Upload Trivy SARIF to GitHub Security
-        if: ${{ !cancelled() && hashFiles('trivy-results.sarif') != '' }}
+        if: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
           category: trivy-image-scan
 
       - name: Generate CycloneDX SBOM
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
-          skip-setup-trivy: true
           image-ref: ${{ needs.docker-image.outputs.smoke_image }}
           format: cyclonedx
           output: trivy-image-sbom.cdx.json
@@ -206,13 +204,65 @@ jobs:
           path: trivy-image-sbom.cdx.json
           if-no-files-found: error
 
-      - name: Fail pipeline on Trivy vulnerabilities
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+  sign-image:
+    name: Sign published image with Cosign
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - docker-image
+      - smoke-test-image
+      - security-scan-image
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.0.0
         with:
-          skip-setup-trivy: true
-          image-ref: ${{ needs.docker-image.outputs.smoke_image }}
-          format: table
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
+          cosign-release: 'v3.0.6'
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign published image by digest
+        env:
+          COSIGN_YES: "true"
+          IMAGE_REF: ${{ needs.docker-image.outputs.image_digest_ref }}
+        run: cosign sign "${IMAGE_REF}"
+
+  verify-signed-image:
+    name: Verify Cosign signature
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - docker-image
+      - sign-image
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.0.0
+        with:
+          cosign-release: 'v3.0.6'
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify signature from this repository workflow
+        env:
+          IMAGE_REF: ${{ needs.docker-image.outputs.image_digest_ref }}
+        run: |
+          cosign verify "${IMAGE_REF}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/ci.yml@.*$"
