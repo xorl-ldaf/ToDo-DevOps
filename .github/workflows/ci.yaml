@@ -316,3 +316,60 @@ jobs:
       - name: Print attestation URL
         run: |
           echo "Attestation URL: ${{ steps.attest.outputs.attestation-url }}"
+
+  verify-image-provenance:
+    name: Verify image provenance attestation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - docker-image
+      - attest-image-provenance
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify provenance via GitHub attestation API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_URI: oci://${{ needs.docker-image.outputs.smoke_image }}
+          REPOSITORY: ${{ github.repository }}
+          SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/ci.yaml
+          SOURCE_REF: ${{ github.ref }}
+        run: |
+          gh attestation verify "${IMAGE_URI}" \
+            --repo "${REPOSITORY}" \
+            --signer-workflow "${SIGNER_WORKFLOW}" \
+            --source-ref "${SOURCE_REF}" \
+            --deny-self-hosted-runners \
+            --format json > provenance-github-api.json
+
+      - name: Verify provenance via OCI registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_URI: oci://${{ needs.docker-image.outputs.smoke_image }}
+          REPOSITORY: ${{ github.repository }}
+          SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/ci.yaml
+          SOURCE_REF: ${{ github.ref }}
+        run: |
+          gh attestation verify "${IMAGE_URI}" \
+            --repo "${REPOSITORY}" \
+            --signer-workflow "${SIGNER_WORKFLOW}" \
+            --source-ref "${SOURCE_REF}" \
+            --deny-self-hosted-runners \
+            --bundle-from-oci \
+            --format json > provenance-oci.json
+
+      - name: Upload provenance verification artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance-verification
+          path: |
+            provenance-github-api.json
+            provenance-oci.json
+          if-no-files-found: error
