@@ -167,17 +167,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy vulnerability scan (SARIF)
-        uses: aquasecurity/trivy-action@v0.33.1
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: ${{ needs.docker-image.outputs.smoke_image }}
+          image-ref: ghcr.io/${{ github.repository_owner }}/todo-devops:${{ github.sha }}
           format: sarif
           output: trivy-results.sarif
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
       - name: Upload Trivy SARIF to GitHub Security
-        if: always()
+        if: ${{ !cancelled() && hashFiles('trivy-results.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
@@ -196,3 +197,13 @@ jobs:
           name: trivy-image-sbom
           path: trivy-image-sbom.cdx.json
           if-no-files-found: error
+
+      - name: Fail pipeline on Trivy vulnerabilities
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/todo-devops:${{ github.sha }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
