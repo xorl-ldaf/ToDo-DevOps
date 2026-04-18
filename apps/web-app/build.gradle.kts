@@ -12,6 +12,15 @@ java {
 dependencies {
     implementation(platform(libs.spring.boot.bom))
 
+    constraints {
+        implementation(libs.tomcat.core) {
+            because("Fixes CVE-2026-34483 and CVE-2026-34487")
+        }
+        implementation(libs.jackson3.core) {
+            because("Fixes GHSA-2m67-wjpj-xhg9")
+        }
+    }
+
     implementation(project(":core:application"))
     implementation(project(":adapters:out:persistence-jpa"))
     implementation(project(":adapters:in:web-rest"))
