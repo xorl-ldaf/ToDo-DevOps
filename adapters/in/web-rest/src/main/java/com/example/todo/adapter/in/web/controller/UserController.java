@@ -52,7 +52,7 @@ public class UserController {
     }
 
     @GetMapping("/{userId}")
-    public UserResponse getUser(@PathVariable UUID userId) {
+    public UserResponse getUser(@PathVariable("userId") UUID userId) {
         return getUserUseCase.getUser(new UserId(userId))
                 .map(WebApiMapper::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("user not found: " + userId));

@@ -57,7 +57,7 @@ public class TaskController {
     }
 
     @GetMapping("/{taskId}")
-    public TaskResponse getTask(@PathVariable UUID taskId) {
+    public TaskResponse getTask(@PathVariable("taskId") UUID taskId) {
         return getTaskUseCase.getTask(new TaskId(taskId))
                 .map(WebApiMapper::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("task not found: " + taskId));
@@ -65,7 +65,7 @@ public class TaskController {
 
     @PatchMapping("/{taskId}/assign")
     public TaskResponse assignTask(
-            @PathVariable UUID taskId,
+            @PathVariable("taskId") UUID taskId,
             @Valid @RequestBody AssignTaskRequest request
     ) {
         return WebApiMapper.toResponse(

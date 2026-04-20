@@ -33,7 +33,7 @@ public class ReminderController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ReminderResponse createReminder(
-            @PathVariable UUID taskId,
+            @PathVariable("taskId") UUID taskId,
             @Valid @RequestBody CreateReminderRequest request
     ) {
         return WebApiMapper.toResponse(
@@ -42,7 +42,7 @@ public class ReminderController {
     }
 
     @GetMapping
-    public List<ReminderResponse> listTaskReminders(@PathVariable UUID taskId) {
+    public List<ReminderResponse> listTaskReminders(@PathVariable("taskId") UUID taskId) {
         return listTaskRemindersUseCase.listTaskReminders(new TaskId(taskId))
                 .stream()
                 .map(WebApiMapper::toResponse)
