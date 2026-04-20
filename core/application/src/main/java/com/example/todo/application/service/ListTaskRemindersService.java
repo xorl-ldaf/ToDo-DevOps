@@ -27,7 +27,7 @@ public class ListTaskRemindersService implements ListTaskRemindersUseCase {
         Objects.requireNonNull(taskId, "taskId must not be null");
 
         if (loadTaskPort.loadById(taskId).isEmpty()) {
-            throw new ResourceNotFoundException("task not found: " + taskId);
+            throw new ResourceNotFoundException("task not found: " + taskId.value());
         }
 
         return loadTaskRemindersPort.loadByTaskId(taskId);

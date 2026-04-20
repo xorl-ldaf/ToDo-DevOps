@@ -38,7 +38,7 @@ public class CreateReminderService implements CreateReminderUseCase {
         }
 
         if (loadTaskPort.loadById(command.taskId()).isEmpty()) {
-            throw new ResourceNotFoundException("task not found: " + command.taskId());
+            throw new ResourceNotFoundException("task not found: " + command.taskId().value());
         }
 
         Reminder reminder = Reminder.schedule(
