@@ -6,6 +6,6 @@ providers:
     folder: ToDo
     type: file
     disableDeletion: true
-    editable: false
+    allowUiUpdates: false
     options:
       path: /var/lib/grafana/dashboards
