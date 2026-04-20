@@ -15,6 +15,10 @@ dependencies {
 
     testCompileOnly("org.projectlombok:lombok:1.18.32")
     testAnnotationProcessor("org.projectlombok:lombok:1.18.32")
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {
