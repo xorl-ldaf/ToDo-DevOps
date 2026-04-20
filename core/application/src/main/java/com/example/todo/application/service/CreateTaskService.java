@@ -35,11 +35,11 @@ public class CreateTaskService implements CreateTaskUseCase {
         }
 
         if (!loadUserPort.existsById(command.authorId())) {
-            throw new ResourceNotFoundException("author not found: " + command.authorId());
+            throw new ResourceNotFoundException("author not found: " + command.authorId().value());
         }
 
         if (command.assigneeId() != null && !loadUserPort.existsById(command.assigneeId())) {
-            throw new ResourceNotFoundException("assignee not found: " + command.assigneeId());
+            throw new ResourceNotFoundException("assignee not found: " + command.assigneeId().value());
         }
 
         Task task = Task.createNew(

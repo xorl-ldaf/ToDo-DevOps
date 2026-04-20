@@ -42,10 +42,10 @@ public class AssignTaskService implements AssignTaskUseCase {
         }
 
         Task task = loadTaskPort.loadById(command.taskId())
-                .orElseThrow(() -> new ResourceNotFoundException("task not found: " + command.taskId()));
+                .orElseThrow(() -> new ResourceNotFoundException("task not found: " + command.taskId().value()));
 
         if (!loadUserPort.existsById(command.assigneeId())) {
-            throw new ResourceNotFoundException("assignee not found: " + command.assigneeId());
+            throw new ResourceNotFoundException("assignee not found: " + command.assigneeId().value());
         }
 
         task.assignTo(command.assigneeId(), clock.instant());
