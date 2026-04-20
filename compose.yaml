@@ -5,12 +5,12 @@ services:
     restart: unless-stopped
 
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-todo}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${TODO_DB_NAME:-todo}
+      POSTGRES_USER: ${TODO_DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
 
     ports:
-      - "5432:5432"
+      - "${TODO_DB_HOST_PORT:-5432}:5432"
 
     volumes:
       - todo_postgres_data:/var/lib/postgresql/data
@@ -35,15 +35,17 @@ services:
         condition: service_healthy
 
     environment:
-      SERVER_PORT: 8080
-      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-todo}
-      DB_USERNAME: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      APP_NAME: ${APP_NAME:-todo-web-app}
-      ACTUATOR_HEALTH_SHOW_DETAILS: ${ACTUATOR_HEALTH_SHOW_DETAILS:-always}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      TODO_APP_SERVER_PORT: ${TODO_APP_SERVER_PORT:-8080}
+      TODO_APP_NAME: ${TODO_APP_NAME:-todo-web-app}
+      TODO_DB_HOST: db
+      TODO_DB_PORT: 5432
+      TODO_DB_NAME: ${TODO_DB_NAME:-todo}
+      TODO_DB_USERNAME: ${TODO_DB_USERNAME:-postgres}
+      TODO_DB_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
 
     ports:
-      - "8080:8080"
+      - "${TODO_APP_HOST_PORT:-8080}:${TODO_APP_SERVER_PORT:-8080}"
 
   prometheus:
     image: prom/prometheus:v3.5.0
@@ -76,8 +78,8 @@ services:
         condition: service_started
 
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_USER: ${TODO_GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${TODO_GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
 
     volumes:

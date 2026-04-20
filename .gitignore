@@ -1,5 +1,4 @@
 .env
-.env.example
 .gradle/
 build/
 **/build/

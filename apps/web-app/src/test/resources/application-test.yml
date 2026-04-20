@@ -1,0 +1,10 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${TODO_OBS_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,info,metrics,prometheus}
+
+  endpoint:
+    health:
+      show-components: ${TODO_OBS_HEALTH_SHOW_COMPONENTS:always}
+      show-details: ${TODO_OBS_HEALTH_SHOW_DETAILS:always}

@@ -4,12 +4,12 @@ services:
     container_name: todo-smoke-db
 
     environment:
-      POSTGRES_DB: todo
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${TODO_DB_NAME:-todo}
+      POSTGRES_USER: ${TODO_DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d todo"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -24,10 +24,14 @@ services:
         condition: service_healthy
 
     environment:
-      SERVER_PORT: 8080
-      DB_URL: jdbc:postgresql://db:5432/todo
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
+      SPRING_PROFILES_ACTIVE: prod
+      TODO_APP_SERVER_PORT: 8080
+      TODO_APP_NAME: ${TODO_APP_NAME:-todo-web-app}
+      TODO_DB_HOST: db
+      TODO_DB_PORT: 5432
+      TODO_DB_NAME: ${TODO_DB_NAME:-todo}
+      TODO_DB_USERNAME: ${TODO_DB_USERNAME:-postgres}
+      TODO_DB_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
 
     ports:
       - "18080:8080"

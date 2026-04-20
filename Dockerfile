@@ -20,9 +20,12 @@ RUN apt-get update \
 
 COPY --from=build /workspace/apps/web-app/build/libs/*.jar /app/app.jar
 
+ENV SPRING_PROFILES_ACTIVE=prod
+ENV TODO_APP_SERVER_PORT=8080
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
-  CMD curl -fsS http://localhost:8080/actuator/health/readiness || exit 1
+  CMD sh -c 'curl -fsS "http://localhost:${TODO_APP_SERVER_PORT}/actuator/health/readiness" || exit 1'
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
