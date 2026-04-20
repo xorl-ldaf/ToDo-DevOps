@@ -71,8 +71,9 @@ public class User {
     }
 
     public void linkTelegramChat(TelegramChatId telegramChatId, Instant now) {
+        Instant actualNow = requireValidUpdateTime(now);
         this.telegramChatId = requireNonNull(telegramChatId, "telegramChatId");
-        this.updatedAt = requireNonNull(now, "now");
+        this.updatedAt = actualNow;
     }
 
     private static String requireText(String value, String fieldName) {
@@ -80,6 +81,14 @@ public class User {
             throw new DomainValidationException(fieldName + " must not be blank");
         }
         return value;
+    }
+
+    private Instant requireValidUpdateTime(Instant now) {
+        Instant actualNow = requireNonNull(now, "now");
+        if (actualNow.isBefore(createdAt)) {
+            throw new DomainValidationException("updatedAt must not be before createdAt");
+        }
+        return actualNow;
     }
 
     private static <T> T requireNonNull(T value, String fieldName) {

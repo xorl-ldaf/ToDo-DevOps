@@ -6,8 +6,6 @@ import com.example.todo.domain.user.UserId;
 import lombok.Getter;
 
 import java.time.Instant;
-import java.util.Objects;
-
 @Getter
 public class Task {
     private final TaskId id;
@@ -103,8 +101,9 @@ public class Task {
 
     public void assignTo(UserId newAssigneeId, Instant now) {
         ensureMutableForAssignment();
+        Instant actualNow = requireValidUpdateTime(now);
         this.assigneeId = requireNonNull(newAssigneeId, "newAssigneeId");
-        this.updatedAt = requireNonNull(now, "now");
+        this.updatedAt = actualNow;
 
         if (this.status == TaskStatus.OPEN) {
             this.status = TaskStatus.IN_PROGRESS;
@@ -118,8 +117,9 @@ public class Task {
             );
         }
 
+        Instant actualNow = requireValidUpdateTime(now);
         this.status = TaskStatus.DONE;
-        this.updatedAt = requireNonNull(now, "now");
+        this.updatedAt = actualNow;
     }
 
     private void ensureMutableForAssignment() {
@@ -135,6 +135,14 @@ public class Task {
             throw new DomainValidationException(fieldName + " must not be blank");
         }
         return value;
+    }
+
+    private Instant requireValidUpdateTime(Instant now) {
+        Instant actualNow = requireNonNull(now, "now");
+        if (actualNow.isBefore(createdAt)) {
+            throw new DomainValidationException("updatedAt must not be before createdAt");
+        }
+        return actualNow;
     }
 
     private static <T> T requireNonNull(T value, String fieldName) {

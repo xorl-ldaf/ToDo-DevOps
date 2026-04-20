@@ -39,6 +39,58 @@ class ReminderTest {
     }
 
     @Test
+    void scheduleShouldRejectNullTaskId() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.schedule(null, now.plusSeconds(60), now)
+        );
+
+        assertEquals("taskId must not be null", exception.getMessage());
+    }
+
+    @Test
+    void restoreShouldRejectUpdatedAtBeforeCreatedAt() {
+        Instant createdAt = Instant.parse("2026-04-19T10:00:00Z");
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.restore(
+                        ReminderId.newId(),
+                        TaskId.newId(),
+                        createdAt.plusSeconds(300),
+                        ReminderStatus.PENDING,
+                        createdAt,
+                        createdAt.minusSeconds(1),
+                        null
+                )
+        );
+
+        assertEquals("updatedAt must not be before createdAt", exception.getMessage());
+    }
+
+    @Test
+    void restoreShouldRejectSentAtBeforeCreatedAt() {
+        Instant createdAt = Instant.parse("2026-04-19T10:00:00Z");
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.restore(
+                        ReminderId.newId(),
+                        TaskId.newId(),
+                        createdAt.plusSeconds(300),
+                        ReminderStatus.SENT,
+                        createdAt,
+                        createdAt.plusSeconds(60),
+                        createdAt.minusSeconds(1)
+                )
+        );
+
+        assertEquals("sentAt must not be before createdAt", exception.getMessage());
+    }
+
+    @Test
     void isDueAtShouldReturnTrueOnlyForPendingDueReminder() {
         Instant now = Instant.parse("2026-04-19T10:00:00Z");
         Reminder reminder = Reminder.schedule(TaskId.newId(), now, now);
@@ -52,6 +104,19 @@ class ReminderTest {
     }
 
     @Test
+    void isDueAtShouldRejectNullMoment() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+        Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(300), now);
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> reminder.isDueAt(null)
+        );
+
+        assertEquals("moment must not be null", exception.getMessage());
+    }
+
+    @Test
     void markPublishedShouldMoveReminderFromPendingToPublished() {
         Instant now = Instant.parse("2026-04-19T10:00:00Z");
         Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(300), now);
@@ -61,6 +126,22 @@ class ReminderTest {
 
         assertEquals(ReminderStatus.PUBLISHED, reminder.getStatus());
         assertEquals(publishedAt, reminder.getUpdatedAt());
+        assertNull(reminder.getSentAt());
+    }
+
+    @Test
+    void markPublishedShouldRejectTimestampBeforeCreatedAtWithoutMutatingState() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+        Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(300), now);
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> reminder.markPublished(now.minusSeconds(1))
+        );
+
+        assertEquals("updatedAt must not be before createdAt", exception.getMessage());
+        assertEquals(ReminderStatus.PENDING, reminder.getStatus());
+        assertEquals(now, reminder.getUpdatedAt());
         assertNull(reminder.getSentAt());
     }
 
@@ -96,6 +177,24 @@ class ReminderTest {
         assertEquals(ReminderStatus.SENT, reminder.getStatus());
         assertEquals(sentAt, reminder.getSentAt());
         assertEquals(sentAt, reminder.getUpdatedAt());
+    }
+
+    @Test
+    void markSentShouldRejectTimestampBeforeCreatedAtWithoutMutatingState() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+        Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(300), now);
+
+        reminder.markPublished(now.plusSeconds(60));
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> reminder.markSent(now.minusSeconds(1))
+        );
+
+        assertEquals("sentAt must not be before createdAt", exception.getMessage());
+        assertEquals(ReminderStatus.PUBLISHED, reminder.getStatus());
+        assertNull(reminder.getSentAt());
+        assertEquals(now.plusSeconds(60), reminder.getUpdatedAt());
     }
 
     @Test

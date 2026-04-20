@@ -93,8 +93,9 @@ public class Reminder {
             );
         }
 
+        Instant actualNow = requireValidUpdateTime(now);
         this.status = ReminderStatus.PUBLISHED;
-        this.updatedAt = requireNonNull(now, "now");
+        this.updatedAt = actualNow;
     }
 
     public void markSent(Instant now) {
@@ -104,10 +105,26 @@ public class Reminder {
             );
         }
 
-        Instant actualNow = requireNonNull(now, "now");
+        Instant actualNow = requireValidSentTime(now);
         this.status = ReminderStatus.SENT;
         this.sentAt = actualNow;
         this.updatedAt = actualNow;
+    }
+
+    private Instant requireValidUpdateTime(Instant now) {
+        Instant actualNow = requireNonNull(now, "now");
+        if (actualNow.isBefore(createdAt)) {
+            throw new DomainValidationException("updatedAt must not be before createdAt");
+        }
+        return actualNow;
+    }
+
+    private Instant requireValidSentTime(Instant now) {
+        Instant actualNow = requireNonNull(now, "now");
+        if (actualNow.isBefore(createdAt)) {
+            throw new DomainValidationException("sentAt must not be before createdAt");
+        }
+        return actualNow;
     }
 
     private static <T> T requireNonNull(T value, String fieldName) {

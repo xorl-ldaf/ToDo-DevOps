@@ -4,6 +4,7 @@ junit = "6.0.3"
 tomcat = "11.0.21"
 jackson3 = "3.1.1"
 testcontainers = "1.21.4"
+mockito = "5.23.0"
 
 [libraries]
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
@@ -27,6 +28,7 @@ tomcat-core = { module = "org.apache.tomcat.embed:tomcat-embed-core", version.re
 jackson3-core = { module = "tools.jackson.core:jackson-core", version.ref = "jackson3" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
