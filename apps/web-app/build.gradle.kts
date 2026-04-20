@@ -30,6 +30,7 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.actuator)
+    runtimeOnly(libs.micrometer.registry.prometheus)
 
     runtimeOnly(libs.postgresql)
     runtimeOnly(libs.flyway.database.postgresql)
