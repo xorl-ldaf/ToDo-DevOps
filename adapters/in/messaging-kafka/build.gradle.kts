@@ -2,6 +2,10 @@ plugins {
     `java-library`
 }
 
+base {
+    archivesName.set("todo-in-messaging-kafka")
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
