@@ -98,6 +98,12 @@ This baseline deploys only the runtime web application workload. PostgreSQL, Kaf
 
 See [deploy/k8s/README.md](/home/honeybadger/itmo/ToDo-DevOps/deploy/k8s/README.md) for render/apply/check commands and the expected image/tag and environment configuration workflow.
 
+For delivery/CD, the repository now keeps deploy automation separate from CI:
+
+- `CI` publishes the image and uploads a `published-image-metadata` artifact with the immutable digest reference
+- `.github/workflows/deploy.yaml` performs a manual Kubernetes deployment by consuming that artifact, rendering the existing Kustomize overlay with the exact digest, and verifying rollout plus application health
+- GitHub Environments are the intended place for deployment-scoped kubeconfig secrets and optional namespace overrides
+
 ## Test profile
 
 `test` is implemented in `apps/web-app/src/test/resources/application-test.yml` on purpose. It keeps test-only actuator defaults alongside the integration tests, is activated by `@ActiveProfiles("test")`, and is not shipped in the runtime artifact.

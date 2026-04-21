@@ -1,0 +1,209 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: GitHub Environment and Kubernetes overlay to deploy
+        required: true
+        type: choice
+        default: prod
+        options:
+          - prod
+          - local
+      publish_run_id:
+        description: CI workflow run ID that produced the published-image-metadata artifact
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.target_environment }}
+    env:
+      TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+      DEPLOYMENT_NAME: todo-web-app
+      SERVICE_NAME: todo-web-app
+      K8S_NAMESPACE: ${{ vars.K8S_NAMESPACE }}
+      KUSTOMIZE_MATCH_IMAGE: ${{ vars.KUSTOMIZE_MATCH_IMAGE }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Resolve deployment defaults
+        run: |
+          case "${TARGET_ENVIRONMENT}" in
+            prod)
+              DEFAULT_NAMESPACE="todo-devops-prod"
+              ;;
+            local)
+              DEFAULT_NAMESPACE="todo-devops-local"
+              ;;
+            *)
+              echo "Unsupported target environment: ${TARGET_ENVIRONMENT}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "RESOLVED_NAMESPACE=${K8S_NAMESPACE:-${DEFAULT_NAMESPACE}}" >> "${GITHUB_ENV}"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+
+      - name: Make render helper executable
+        run: chmod +x ./scripts/render-k8s-overlay.sh
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download published image metadata artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p build/deploy/metadata
+          gh run download "${{ inputs.publish_run_id }}" \
+            --repo "${{ github.repository }}" \
+            --name published-image-metadata \
+            --dir build/deploy/metadata
+
+      - name: Resolve immutable image reference
+        id: metadata
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata_path = Path("build/deploy/metadata/published-image-metadata.json")
+          data = json.loads(metadata_path.read_text())
+
+          expected_repository = os.environ["GITHUB_REPOSITORY"]
+          if data.get("repository") != expected_repository:
+              raise SystemExit(
+                  f"Metadata repository mismatch: expected {expected_repository}, got {data.get('repository')}"
+              )
+
+          image_digest_ref = data.get("image_digest_ref", "")
+          if "@sha256:" not in image_digest_ref:
+              raise SystemExit(f"Artifact does not contain an immutable digest reference: {image_digest_ref}")
+
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          with output_path.open("a", encoding="utf-8") as handle:
+              handle.write(f"image_digest_ref={image_digest_ref}\n")
+              handle.write(f"image_name={data.get('image_name', '')}\n")
+              handle.write(f"source_sha={data.get('sha', '')}\n")
+              handle.write(f"source_ref={data.get('ref', '')}\n")
+          PY
+
+      - name: Verify published image exists in registry
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.metadata.outputs.image_digest_ref }}
+        run: docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" > /dev/null
+
+      - name: Write kubeconfig from environment secret
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          if [[ -z "${KUBE_CONFIG}" ]]; then
+            echo "KUBE_CONFIG GitHub Environment secret is required" >&2
+            exit 1
+          fi
+
+          KUBECONFIG_PATH="${RUNNER_TEMP}/kubeconfig"
+          install -m 600 /dev/null "${KUBECONFIG_PATH}"
+          printf '%s' "${KUBE_CONFIG}" > "${KUBECONFIG_PATH}"
+          echo "KUBECONFIG=${KUBECONFIG_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Check target cluster access
+        run: |
+          kubectl config current-context
+          kubectl version --output=yaml > /tmp/kubectl-version.yaml
+
+      - name: Render manifest with immutable image digest
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.metadata.outputs.image_digest_ref }}
+        run: |
+          mkdir -p build/deploy
+          ./scripts/render-k8s-overlay.sh "${TARGET_ENVIRONMENT}" "${IMAGE_DIGEST_REF}" build/deploy/rendered.yaml
+          test -s build/deploy/rendered.yaml
+          grep -n "${IMAGE_DIGEST_REF}" build/deploy/rendered.yaml
+
+      - name: Apply Kubernetes manifest
+        run: kubectl apply -f build/deploy/rendered.yaml
+
+      - name: Verify deployed image pin
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.metadata.outputs.image_digest_ref }}
+        run: |
+          DEPLOYED_IMAGE="$(kubectl -n "${RESOLVED_NAMESPACE}" get deployment "${DEPLOYMENT_NAME}" -o jsonpath='{.spec.template.spec.containers[?(@.name=="app")].image}')"
+          test "${DEPLOYED_IMAGE}" = "${IMAGE_DIGEST_REF}"
+
+      - name: Wait for deployment rollout
+        run: kubectl -n "${RESOLVED_NAMESPACE}" rollout status deployment/"${DEPLOYMENT_NAME}" --timeout=240s
+
+      - name: Run post-deploy smoke checks
+        run: |
+          kubectl -n "${RESOLVED_NAMESPACE}" port-forward service/"${SERVICE_NAME}" 18080:80 > /tmp/todo-port-forward.log 2>&1 &
+          PORT_FORWARD_PID=$!
+
+          cleanup() {
+            kill "${PORT_FORWARD_PID}" > /dev/null 2>&1 || true
+            wait "${PORT_FORWARD_PID}" 2>/dev/null || true
+          }
+
+          trap cleanup EXIT
+
+          READY=0
+          for _ in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:18080/actuator/health/readiness > /tmp/todo-readiness.json; then
+              READY=1
+              break
+            fi
+            sleep 3
+          done
+
+          if [[ "${READY}" -ne 1 ]]; then
+            cat /tmp/todo-port-forward.log || true
+            exit 1
+          fi
+
+          curl --fail --silent http://127.0.0.1:18080/api/users > /tmp/todo-users.json
+
+          python3 - <<'PY'
+          import json
+
+          with open("/tmp/todo-readiness.json", encoding="utf-8") as handle:
+              readiness = json.load(handle)
+          if readiness.get("status") != "UP":
+              raise SystemExit(f"Unexpected readiness payload: {readiness}")
+
+          with open("/tmp/todo-users.json", encoding="utf-8") as handle:
+              users = json.load(handle)
+          if not isinstance(users, list):
+              raise SystemExit(f"/api/users did not return a JSON array: {users}")
+          PY
+
+      - name: Dump cluster state on failure
+        if: failure()
+        run: |
+          kubectl -n "${RESOLVED_NAMESPACE}" get deployment,replicaset,pod,service,ingress || true
+          kubectl -n "${RESOLVED_NAMESPACE}" describe deployment "${DEPLOYMENT_NAME}" || true
+          kubectl -n "${RESOLVED_NAMESPACE}" logs deployment/"${DEPLOYMENT_NAME}" --all-containers --tail=200 || true

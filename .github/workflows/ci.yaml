@@ -110,6 +110,32 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Persist published image metadata
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p build/ci
+          cat > build/ci/published-image-metadata.json <<EOF
+          {
+            "repository": "${{ github.repository }}",
+            "run_id": "${{ github.run_id }}",
+            "run_attempt": "${{ github.run_attempt }}",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "image_name": "${{ env.IMAGE_NAME }}",
+            "smoke_image": "${{ format('{0}:sha-{1}', env.IMAGE_NAME, github.sha) }}",
+            "image_digest": "${{ steps.docker_build.outputs.digest }}",
+            "image_digest_ref": "${{ format('{0}@{1}', env.IMAGE_NAME, steps.docker_build.outputs.digest) }}"
+          }
+          EOF
+
+      - name: Upload published image metadata artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-image-metadata
+          path: build/ci/published-image-metadata.json
+          if-no-files-found: error
+
   smoke-test-image:
     name: Smoke test published image
     runs-on: ubuntu-latest
@@ -295,7 +321,6 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-      artifact-metadata: write
 
     steps:
       - name: Log in to GitHub Container Registry
@@ -388,7 +413,6 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-      artifact-metadata: write
 
     steps:
       - name: Log in to GitHub Container Registry
