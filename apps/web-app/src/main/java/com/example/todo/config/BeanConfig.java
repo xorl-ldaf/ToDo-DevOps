@@ -30,6 +30,7 @@ import com.example.todo.application.service.ListUsersService;
 import com.example.todo.application.service.ScanDueRemindersService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.Clock;
 
@@ -52,8 +53,11 @@ public class BeanConfig {
     }
 
     @Bean
-    ReminderPersistenceAdapter reminderPersistenceAdapter(SpringDataReminderRepository repository) {
-        return new ReminderPersistenceAdapter(repository);
+    ReminderPersistenceAdapter reminderPersistenceAdapter(
+            SpringDataReminderRepository repository,
+            TodoReminderDeliveryProperties reminderDeliveryProperties
+    ) {
+        return new ReminderPersistenceAdapter(repository, reminderDeliveryProperties.requireBatchSize());
     }
 
     @Bean
@@ -83,7 +87,7 @@ public class BeanConfig {
     }
 
     @Bean
-    ScanDueRemindersUseCase scanDueRemindersUseCase(
+    ScanDueRemindersService scanDueRemindersService(
             ReminderPersistenceAdapter reminderAdapter,
             TaskPersistenceAdapter taskAdapter,
             UserPersistenceAdapter userAdapter,
@@ -96,6 +100,14 @@ public class BeanConfig {
                 deliverReminderNotificationPort,
                 reminderAdapter
         );
+    }
+
+    @Bean
+    ScanDueRemindersUseCase scanDueRemindersUseCase(
+            ScanDueRemindersService delegate,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new TransactionalScanDueRemindersUseCase(delegate, transactionManager);
     }
 
     @Bean

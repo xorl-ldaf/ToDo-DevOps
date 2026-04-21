@@ -33,6 +33,9 @@ Required vs optional inputs:
 - always safe to leave unset for local `dev`: `TODO_APP_NAME`, `TODO_APP_SERVER_PORT`, `TODO_DB_HOST`, `TODO_DB_PORT`, `TODO_DB_NAME`, `TODO_DB_USERNAME`, `TODO_GRAFANA_ADMIN_USER`
 - always safe to leave unset for local `dev`: `TODO_KAFKA_ENABLED`, `TODO_KAFKA_BOOTSTRAP_SERVERS`, `TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1`, `TODO_KAFKA_CONSUMER_GROUP_ID`
 - always safe to leave unset for local `dev`: `TODO_TELEGRAM_ENABLED`, `TODO_TELEGRAM_BASE_URL`, `TODO_REMINDER_DELIVERY_ENABLED`, `TODO_REMINDER_DELIVERY_INITIAL_DELAY_MS`, `TODO_REMINDER_DELIVERY_FIXED_DELAY_MS`
+- optional hardening overrides: `TODO_TELEGRAM_CONNECT_TIMEOUT`, `TODO_TELEGRAM_READ_TIMEOUT`, `TODO_TELEGRAM_MAX_ATTEMPTS`, `TODO_TELEGRAM_RETRY_BACKOFF`
+- optional hardening overrides: `TODO_KAFKA_PRODUCER_RETRIES`, `TODO_KAFKA_PRODUCER_RETRY_BACKOFF`, `TODO_KAFKA_PRODUCER_REQUEST_TIMEOUT`, `TODO_KAFKA_PRODUCER_DELIVERY_TIMEOUT`, `TODO_KAFKA_CONSUMER_MAX_ATTEMPTS`, `TODO_KAFKA_CONSUMER_RETRY_BACKOFF`
+- optional runtime hardening overrides: `TODO_REMINDER_DELIVERY_BATCH_SIZE`, `TODO_APP_SHUTDOWN_TIMEOUT`
 - required secrets for any real environment and should come from the outside: `TODO_DB_PASSWORD`, `TODO_GRAFANA_ADMIN_PASSWORD`
 - required secret when `TODO_TELEGRAM_ENABLED=true`: `TODO_TELEGRAM_BOT_TOKEN`
 - required for `prod` runs: `TODO_DB_USERNAME` and either `TODO_DB_URL` or the full `TODO_DB_HOST` + `TODO_DB_PORT` + `TODO_DB_NAME` set
@@ -72,14 +75,25 @@ export TODO_REMINDER_DELIVERY_ENABLED=true
 Optional overrides:
 
 - `TODO_TELEGRAM_BASE_URL` for stub tests or proxying; default is `https://api.telegram.org`
+- `TODO_TELEGRAM_CONNECT_TIMEOUT` and `TODO_TELEGRAM_READ_TIMEOUT` for explicit outbound HTTP timeout boundaries
+- `TODO_TELEGRAM_MAX_ATTEMPTS` and `TODO_TELEGRAM_RETRY_BACKOFF` for bounded retry discipline on transient Telegram failures
 - `TODO_REMINDER_DELIVERY_INITIAL_DELAY_MS` for scheduler startup delay
 - `TODO_REMINDER_DELIVERY_FIXED_DELAY_MS` for the due-reminder scan cadence
+- `TODO_REMINDER_DELIVERY_BATCH_SIZE` for the maximum number of due reminders claimed per scan transaction
 
 Delivery contract baseline:
 
 - notification type/version: `reminder.notification` / `v1`
 - required fields: reminder id, task id, task title, remind-at timestamp, recipient user id, recipient display name, recipient Telegram chat id
 - message text is formatted inside the Telegram adapter from the structured contract; Telegram API details do not leak into controllers or domain code
+
+Production hardening baseline for reminder delivery:
+
+- Telegram delivery now uses explicit connect/read timeouts instead of unbounded waits
+- retries are limited to transient transport errors, HTTP `429`, and `5xx`; permanent `4xx` failures are not retried
+- due-reminder scans claim pending reminders through a database transaction with `FOR UPDATE SKIP LOCKED`, which prevents duplicate pickup across overlapping scheduler runs and multiple pods
+- permanent delivery failures move reminders to `FAILED`; transient failures keep them `PENDING` for a later scan
+- metrics expose delivery attempts, retries, scan outcomes, and Kafka publish/consume failures so failures are visible instead of silent
 
 Minimal local verification flow:
 
@@ -135,6 +149,7 @@ With the local Compose stack running:
 - Provisioned dashboard: `ToDo / ToDo App Observability Baseline`
 - Reminder scheduling Kafka flow emits/consumes `todo.reminder.scheduled.v1` by default and exposes `todo.reminder.scheduled.events.consumed` plus `todo.reminder.scheduled.event.consume.lag`
 - Telegram reminder delivery uses the separate due-reminder scan loop and does not depend on the Kafka scheduling topic
+- Production-hardening signals add `todo.reminder.delivery.attempts`, `todo.reminder.delivery.retries`, `todo.reminder.delivery.scans`, `todo.reminder.delivery.delivered`, `todo.reminder.scheduled.events.publish.failures`, and `todo.reminder.scheduled.events.failed`
 
 ## Kubernetes baseline
 
@@ -147,6 +162,25 @@ Kubernetes manifests are tracked separately from the Docker Compose flow under `
 This baseline deploys only the runtime web application workload. PostgreSQL, Kafka, Prometheus, and Grafana stay outside the cluster scope for this roadmap step and must be provided as external dependencies through the overlay `ConfigMap` and `Secret` inputs.
 
 See [deploy/k8s/README.md](/home/honeybadger/itmo/ToDo-DevOps/deploy/k8s/README.md) for render/apply/check commands and the expected image/tag and environment configuration workflow.
+
+## Production hardening baseline
+
+Roadmap item 19 is implemented as a baseline hardening step on top of the existing reminder, Kafka, and Kubernetes foundations.
+
+What is hardened:
+
+- Telegram outbound delivery now has explicit timeout boundaries and bounded retry behavior
+- reminder background processing now runs inside a transaction and claims due reminders with row locking to avoid duplicate concurrent pickup
+- permanent Telegram delivery failures stop retry storms by transitioning reminders to `FAILED`
+- Kafka producer/consumer configuration now has explicit retry/backoff/timeouts and failure visibility metrics
+- Kubernetes deployment defaults now include rolling-update guardrails plus graceful shutdown budget
+
+What remains intentionally out of scope:
+
+- no outbox / transactional saga platform
+- no exactly-once guarantee against every external side effect boundary
+- no dead-letter-topic ecosystem for the current Kafka baseline
+- no HPA / PDB / NetworkPolicy platform expansion in Kubernetes
 
 For delivery/CD, the repository now keeps deploy automation separate from CI:
 

@@ -4,6 +4,13 @@ metadata:
   name: todo-web-app
 spec:
   replicas: 1
+  minReadySeconds: 10
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: todo-web-app
@@ -15,6 +22,7 @@ spec:
         app.kubernetes.io/component: web-app
         app.kubernetes.io/part-of: todo-devops
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: app
           image: ghcr.io/xorl-ldaf/todo-devops:latest

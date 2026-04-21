@@ -9,6 +9,7 @@ What is intentionally in scope:
 - `ConfigMap` and `Secret` generation from environment-style key/value files
 - startup, readiness, and liveness probes wired to real Spring Boot actuator endpoints
 - resource requests and limits
+- rolling-update strategy and termination grace period for safer rollout and shutdown behavior
 - image/tag parameterization through Kustomize overlays
 
 What is intentionally out of scope for this roadmap item:
@@ -23,6 +24,13 @@ What is intentionally out of scope for this roadmap item:
 - `overlays/prod/`: production-oriented baseline with stricter health detail defaults and higher runtime footprint
 
 The application still uses the existing `TODO_*` environment variable strategy. Kubernetes only becomes another orchestration layer on top of the same runtime contract already used by Docker Compose and direct Spring runs.
+
+Production hardening baseline additions:
+
+- `server.shutdown=graceful` with configurable Spring shutdown timeout
+- Deployment rolling updates keep `maxUnavailable: 0` and `maxSurge: 1`
+- `terminationGracePeriodSeconds: 30` gives the pod time to drain during shutdown
+- reminder background scans are now transaction-bound and use database row locking, which matters once the prod overlay runs multiple replicas
 
 ## Render manifests
 
@@ -84,6 +92,10 @@ Key mappings:
 - database connection: `TODO_DB_HOST`, `TODO_DB_PORT`, `TODO_DB_NAME`, `TODO_DB_USERNAME`, `TODO_DB_PASSWORD`
 - Kafka wiring: `TODO_KAFKA_ENABLED`, `TODO_KAFKA_BOOTSTRAP_SERVERS`, `TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1`, `TODO_KAFKA_CONSUMER_GROUP_ID`
 - Telegram delivery: `TODO_TELEGRAM_ENABLED`, `TODO_TELEGRAM_BOT_TOKEN`, `TODO_TELEGRAM_BASE_URL`, `TODO_REMINDER_DELIVERY_ENABLED`, `TODO_REMINDER_DELIVERY_INITIAL_DELAY_MS`, `TODO_REMINDER_DELIVERY_FIXED_DELAY_MS`
+- Telegram hardening: `TODO_TELEGRAM_CONNECT_TIMEOUT`, `TODO_TELEGRAM_READ_TIMEOUT`, `TODO_TELEGRAM_MAX_ATTEMPTS`, `TODO_TELEGRAM_RETRY_BACKOFF`
+- reminder scan discipline: `TODO_REMINDER_DELIVERY_BATCH_SIZE`
+- Kafka hardening: `TODO_KAFKA_PRODUCER_RETRIES`, `TODO_KAFKA_PRODUCER_RETRY_BACKOFF`, `TODO_KAFKA_PRODUCER_REQUEST_TIMEOUT`, `TODO_KAFKA_PRODUCER_DELIVERY_TIMEOUT`, `TODO_KAFKA_CONSUMER_MAX_ATTEMPTS`, `TODO_KAFKA_CONSUMER_RETRY_BACKOFF`
+- graceful shutdown: `TODO_APP_SHUTDOWN_TIMEOUT`
 - actuator exposure and health detail policy: `TODO_OBS_ENDPOINTS_WEB_EXPOSURE_INCLUDE`, `TODO_OBS_HEALTH_SHOW_COMPONENTS`, `TODO_OBS_HEALTH_SHOW_DETAILS`
 
 ## Image strategy

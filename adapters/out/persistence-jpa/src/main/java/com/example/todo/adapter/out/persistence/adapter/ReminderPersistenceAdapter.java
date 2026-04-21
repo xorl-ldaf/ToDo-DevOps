@@ -7,7 +7,6 @@ import com.example.todo.application.port.out.LoadDueRemindersPort;
 import com.example.todo.application.port.out.LoadTaskRemindersPort;
 import com.example.todo.application.port.out.SaveReminderPort;
 import com.example.todo.domain.reminder.Reminder;
-import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.task.TaskId;
 
 import java.time.Instant;
@@ -16,14 +15,16 @@ import java.util.List;
 public class ReminderPersistenceAdapter implements LoadDueRemindersPort, SaveReminderPort, LoadTaskRemindersPort {
 
     private final SpringDataReminderRepository repository;
+    private final int dueReminderBatchSize;
 
-    public ReminderPersistenceAdapter(SpringDataReminderRepository repository) {
+    public ReminderPersistenceAdapter(SpringDataReminderRepository repository, int dueReminderBatchSize) {
         this.repository = repository;
+        this.dueReminderBatchSize = dueReminderBatchSize;
     }
 
     @Override
     public List<Reminder> loadDueReminders(Instant now) {
-        return repository.findByStatusAndRemindAtLessThanEqual(ReminderStatus.PENDING, now)
+        return repository.findDuePendingForDelivery(now, dueReminderBatchSize)
                 .stream()
                 .map(ReminderPersistenceMapper::toDomain)
                 .toList();

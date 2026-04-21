@@ -2,6 +2,7 @@ package com.example.todo.config;
 
 import com.example.todo.application.port.in.ScanDueRemindersUseCase;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -10,14 +11,16 @@ import java.time.Clock;
 
 @Configuration
 @EnableScheduling
+@EnableConfigurationProperties(TodoReminderDeliveryProperties.class)
 public class ReminderDeliveryRuntimeConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = "todo.reminder-delivery", name = "enabled", havingValue = "true")
     ReminderDeliveryScheduler reminderDeliveryScheduler(
             ScanDueRemindersUseCase scanDueRemindersUseCase,
-            Clock clock
+            Clock clock,
+            io.micrometer.core.instrument.MeterRegistry meterRegistry
     ) {
-        return new ReminderDeliveryScheduler(scanDueRemindersUseCase, clock);
+        return new ReminderDeliveryScheduler(scanDueRemindersUseCase, clock, meterRegistry);
     }
 }

@@ -18,6 +18,8 @@ spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-
 spring-kafka = { module = "org.springframework.kafka:spring-kafka" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
+micrometer-core = { module = "io.micrometer:micrometer-core" }
+slf4j-api = { module = "org.slf4j:slf4j-api" }
 postgresql = { module = "org.postgresql:postgresql" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
 jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310" }

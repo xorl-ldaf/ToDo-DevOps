@@ -18,6 +18,8 @@ dependencies {
 
     implementation(platform(libs.spring.boot.bom))
     implementation(libs.jackson.databind)
+    implementation(libs.micrometer.core)
+    implementation(libs.slf4j.api)
     implementation(libs.spring.kafka)
 }
 

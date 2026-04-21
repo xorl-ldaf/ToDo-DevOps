@@ -98,6 +98,18 @@ public class Reminder {
         this.updatedAt = actualNow;
     }
 
+    public void markFailed(Instant now) {
+        if (this.status != ReminderStatus.PENDING) {
+            throw new InvalidStateTransitionException(
+                    "reminder cannot be marked as failed from status: " + this.status
+            );
+        }
+
+        Instant actualNow = requireValidUpdateTime(now);
+        this.status = ReminderStatus.FAILED;
+        this.updatedAt = actualNow;
+    }
+
     public void markSent(Instant now) {
         if (this.status != ReminderStatus.PUBLISHED) {
             throw new InvalidStateTransitionException(

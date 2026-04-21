@@ -79,13 +79,16 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
                             recipient.getTelegramChatId().value()
                     )
             );
-            if (!deliveryResult.deliveredSuccessfully()) {
+            if (deliveryResult.deliveredSuccessfully()) {
+                reminder.markPublished(now);
+                saveReminderPort.save(reminder);
+                publishedCount++;
                 continue;
             }
-
-            reminder.markPublished(now);
-            saveReminderPort.save(reminder);
-            publishedCount++;
+            if (deliveryResult.permanentFailure()) {
+                reminder.markFailed(now);
+                saveReminderPort.save(reminder);
+            }
         }
 
         return publishedCount;

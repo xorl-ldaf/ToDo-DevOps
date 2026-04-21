@@ -5,9 +5,9 @@ import java.util.Objects;
 public record ReminderNotificationDeliveryResult(Status status, String reason) {
     public ReminderNotificationDeliveryResult {
         status = Objects.requireNonNull(status, "status must not be null");
-        reason = status == Status.SKIPPED
-                ? requireText(reason, "reason")
-                : normalizeDeliveredReason(reason);
+        reason = status == Status.DELIVERED
+                ? normalizeDeliveredReason(reason)
+                : requireText(reason, "reason");
     }
 
     public static ReminderNotificationDeliveryResult delivered() {
@@ -18,13 +18,35 @@ public record ReminderNotificationDeliveryResult(Status status, String reason) {
         return new ReminderNotificationDeliveryResult(Status.SKIPPED, reason);
     }
 
+    public static ReminderNotificationDeliveryResult retryableFailure(String reason) {
+        return new ReminderNotificationDeliveryResult(Status.RETRYABLE_FAILURE, reason);
+    }
+
+    public static ReminderNotificationDeliveryResult permanentFailure(String reason) {
+        return new ReminderNotificationDeliveryResult(Status.PERMANENT_FAILURE, reason);
+    }
+
     public boolean deliveredSuccessfully() {
         return status == Status.DELIVERED;
     }
 
+    public boolean retryableFailure() {
+        return status == Status.RETRYABLE_FAILURE;
+    }
+
+    public boolean permanentFailure() {
+        return status == Status.PERMANENT_FAILURE;
+    }
+
+    public boolean skipped() {
+        return status == Status.SKIPPED;
+    }
+
     public enum Status {
         DELIVERED,
-        SKIPPED
+        SKIPPED,
+        RETRYABLE_FAILURE,
+        PERMANENT_FAILURE
     }
 
     private static String requireText(String value, String fieldName) {

@@ -206,6 +206,45 @@ class ScanDueRemindersServiceTest {
         verifyNoInteractions(saveReminderPort);
     }
 
+    @Test
+    void scanAndPublishDueRemindersShouldKeepReminderPendingWhenDeliveryFailsTransiently() {
+        Reminder dueReminder = pendingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", NOW.minusSeconds(60));
+        Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
+        User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
+        when(loadDueRemindersPort.loadDueReminders(NOW)).thenReturn(List.of(dueReminder));
+        when(loadTaskPort.loadById(task.getId())).thenReturn(java.util.Optional.of(task));
+        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(java.util.Optional.of(recipient));
+        when(deliverReminderNotificationPort.deliver(any(ReminderNotificationV1.class)))
+                .thenReturn(ReminderNotificationDeliveryResult.retryableFailure("telegram timeout"));
+
+        int publishedCount = service.scanAndPublishDueReminders(NOW);
+
+        assertEquals(0, publishedCount);
+        assertEquals(ReminderStatus.PENDING, dueReminder.getStatus());
+        verify(deliverReminderNotificationPort).deliver(any(ReminderNotificationV1.class));
+        verifyNoInteractions(saveReminderPort);
+    }
+
+    @Test
+    void scanAndPublishDueRemindersShouldMarkReminderFailedWhenDeliveryFailsPermanently() {
+        Reminder dueReminder = pendingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", NOW.minusSeconds(60));
+        Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
+        User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
+        when(loadDueRemindersPort.loadDueReminders(NOW)).thenReturn(List.of(dueReminder));
+        when(loadTaskPort.loadById(task.getId())).thenReturn(java.util.Optional.of(task));
+        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(java.util.Optional.of(recipient));
+        when(deliverReminderNotificationPort.deliver(any(ReminderNotificationV1.class)))
+                .thenReturn(ReminderNotificationDeliveryResult.permanentFailure("telegram rejected chat"));
+        when(saveReminderPort.save(any(Reminder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        int publishedCount = service.scanAndPublishDueReminders(NOW);
+
+        assertEquals(0, publishedCount);
+        assertEquals(ReminderStatus.FAILED, dueReminder.getStatus());
+        verify(deliverReminderNotificationPort).deliver(any(ReminderNotificationV1.class));
+        verify(saveReminderPort).save(dueReminder);
+    }
+
     private Reminder pendingReminder(String reminderId, Instant remindAt) {
         return Reminder.restore(
                 reminderId(reminderId),
