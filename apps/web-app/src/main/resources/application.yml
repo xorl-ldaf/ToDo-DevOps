@@ -30,6 +30,14 @@ todo:
     consumer-group-id: ${TODO_KAFKA_CONSUMER_GROUP_ID:todo-web-app-reminder-scheduled-v1}
     topics:
       reminder-scheduled-v1: ${TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1:todo.reminder.scheduled.v1}
+  telegram:
+    enabled: ${TODO_TELEGRAM_ENABLED:false}
+    base-url: ${TODO_TELEGRAM_BASE_URL:https://api.telegram.org}
+    bot-token: ${TODO_TELEGRAM_BOT_TOKEN:}
+  reminder-delivery:
+    enabled: ${TODO_REMINDER_DELIVERY_ENABLED:${TODO_TELEGRAM_ENABLED:false}}
+    initial-delay-ms: ${TODO_REMINDER_DELIVERY_INITIAL_DELAY_MS:5000}
+    fixed-delay-ms: ${TODO_REMINDER_DELIVERY_FIXED_DELAY_MS:30000}
 
 management:
   endpoint:

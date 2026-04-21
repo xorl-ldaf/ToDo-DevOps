@@ -24,6 +24,7 @@ dependencies {
     implementation(project(":core:application"))
     implementation(project(":adapters:out:persistence-jpa"))
     implementation(project(":adapters:out:messaging-kafka"))
+    implementation(project(":adapters:out:messaging-telegram"))
     implementation(project(":adapters:in:messaging-kafka"))
     implementation(project(":adapters:in:web-rest"))
 

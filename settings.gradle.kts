@@ -19,6 +19,7 @@ include(
     "core:application",
     "adapters:out:persistence-jpa",
     "adapters:out:messaging-kafka",
+    "adapters:out:messaging-telegram",
     "adapters:in:messaging-kafka",
     "adapters:in:web-rest",
     "apps:web-app"

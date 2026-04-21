@@ -20,6 +20,8 @@ Environment variable conventions:
 - `TODO_APP_*` for application settings such as name and port
 - `TODO_DB_*` for database connection settings
 - `TODO_KAFKA_*` for Kafka bootstrap/topic/group settings
+- `TODO_TELEGRAM_*` for Telegram outbound reminder delivery
+- `TODO_REMINDER_DELIVERY_*` for the due-reminder scan loop that drives outbound delivery
 - `TODO_OBS_*` for actuator and observability tuning
 - `TODO_GRAFANA_*` for local Grafana credentials
 - `TODO_DB_URL` is an optional full JDBC override; otherwise the app composes the JDBC URL from `TODO_DB_HOST`, `TODO_DB_PORT`, and `TODO_DB_NAME`
@@ -30,7 +32,9 @@ Required vs optional inputs:
 
 - always safe to leave unset for local `dev`: `TODO_APP_NAME`, `TODO_APP_SERVER_PORT`, `TODO_DB_HOST`, `TODO_DB_PORT`, `TODO_DB_NAME`, `TODO_DB_USERNAME`, `TODO_GRAFANA_ADMIN_USER`
 - always safe to leave unset for local `dev`: `TODO_KAFKA_ENABLED`, `TODO_KAFKA_BOOTSTRAP_SERVERS`, `TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1`, `TODO_KAFKA_CONSUMER_GROUP_ID`
+- always safe to leave unset for local `dev`: `TODO_TELEGRAM_ENABLED`, `TODO_TELEGRAM_BASE_URL`, `TODO_REMINDER_DELIVERY_ENABLED`, `TODO_REMINDER_DELIVERY_INITIAL_DELAY_MS`, `TODO_REMINDER_DELIVERY_FIXED_DELAY_MS`
 - required secrets for any real environment and should come from the outside: `TODO_DB_PASSWORD`, `TODO_GRAFANA_ADMIN_PASSWORD`
+- required secret when `TODO_TELEGRAM_ENABLED=true`: `TODO_TELEGRAM_BOT_TOKEN`
 - required for `prod` runs: `TODO_DB_USERNAME` and either `TODO_DB_URL` or the full `TODO_DB_HOST` + `TODO_DB_PORT` + `TODO_DB_NAME` set
 - optional observability overrides: `TODO_OBS_ENDPOINTS_WEB_EXPOSURE_INCLUDE`, `TODO_OBS_HEALTH_SHOW_COMPONENTS`, `TODO_OBS_HEALTH_SHOW_DETAILS`
 
@@ -39,6 +43,51 @@ Defaults are safe where possible:
 - shared config keeps only common settings
 - `prod` requires external database connection values, hides actuator component/detail data by default, and does not expose `/actuator/metrics`
 - `dev` and `test` keep richer actuator visibility for local debugging and automated checks
+
+## Telegram reminder delivery
+
+Roadmap item 18 is implemented as a real outbound adapter, not as a controller-side bot stub:
+
+- due reminders are scanned by the application runtime and converted into an explicit application contract `ReminderNotificationV1`
+- the application layer depends on the outbound port `DeliverReminderNotificationPort`
+- the Telegram HTTP integration lives in `adapters/out/messaging-telegram`
+- if Telegram delivery is disabled, the runtime stays healthy and reminders remain `PENDING`
+- reminders are marked `PUBLISHED` only after the outbound adapter reports a successful delivery
+
+Current recipient strategy:
+
+- bot credentials come from environment variables
+- recipient chat routing comes from the existing user field `telegramChatId`
+- if a due reminder resolves to a user without `telegramChatId`, the reminder is skipped and stays pending
+- if Telegram is enabled without `TODO_TELEGRAM_BOT_TOKEN`, the app fails fast on startup because that is a real misconfiguration
+
+Enable it with:
+
+```bash
+export TODO_TELEGRAM_ENABLED=true
+export TODO_TELEGRAM_BOT_TOKEN=<telegram-bot-token>
+export TODO_REMINDER_DELIVERY_ENABLED=true
+```
+
+Optional overrides:
+
+- `TODO_TELEGRAM_BASE_URL` for stub tests or proxying; default is `https://api.telegram.org`
+- `TODO_REMINDER_DELIVERY_INITIAL_DELAY_MS` for scheduler startup delay
+- `TODO_REMINDER_DELIVERY_FIXED_DELAY_MS` for the due-reminder scan cadence
+
+Delivery contract baseline:
+
+- notification type/version: `reminder.notification` / `v1`
+- required fields: reminder id, task id, task title, remind-at timestamp, recipient user id, recipient display name, recipient Telegram chat id
+- message text is formatted inside the Telegram adapter from the structured contract; Telegram API details do not leak into controllers or domain code
+
+Minimal local verification flow:
+
+1. Create a user with `telegramChatId`.
+2. Create a task for that user.
+3. Create a reminder in the future.
+4. Run the app with Telegram delivery enabled.
+5. Wait for the due-reminder scan loop to call the Telegram Bot API `sendMessage`.
 
 ## Local run
 
@@ -85,6 +134,7 @@ With the local Compose stack running:
 - Grafana UI: `http://localhost:3000` with `${TODO_GRAFANA_ADMIN_USER:-admin}` / `${TODO_GRAFANA_ADMIN_PASSWORD:-admin}`
 - Provisioned dashboard: `ToDo / ToDo App Observability Baseline`
 - Reminder scheduling Kafka flow emits/consumes `todo.reminder.scheduled.v1` by default and exposes `todo.reminder.scheduled.events.consumed` plus `todo.reminder.scheduled.event.consume.lag`
+- Telegram reminder delivery uses the separate due-reminder scan loop and does not depend on the Kafka scheduling topic
 
 ## Kubernetes baseline
 
