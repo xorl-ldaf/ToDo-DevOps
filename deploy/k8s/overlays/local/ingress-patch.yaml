@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: todo-web-app
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: todo-devops.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: todo-web-app
+                port:
+                  name: http

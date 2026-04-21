@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: todo-devops-prod
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+configMapGenerator:
+  - name: todo-web-app-config
+    envs:
+      - configmap.env
+
+secretGenerator:
+  - name: todo-web-app-secret
+    envs:
+      - secret.env
+
+images:
+  - name: ghcr.io/xorl-ldaf/todo-devops
+    newName: ghcr.io/xorl-ldaf/todo-devops
+    newTag: latest
+
+patches:
+  - path: deployment-patch.yaml
+  - path: ingress-patch.yaml

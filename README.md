@@ -86,6 +86,18 @@ With the local Compose stack running:
 - Provisioned dashboard: `ToDo / ToDo App Observability Baseline`
 - Reminder scheduling Kafka flow emits/consumes `todo.reminder.scheduled.v1` by default and exposes `todo.reminder.scheduled.events.consumed` plus `todo.reminder.scheduled.event.consume.lag`
 
+## Kubernetes baseline
+
+Kubernetes manifests are tracked separately from the Docker Compose flow under `deploy/k8s/`.
+
+- Kustomize base: `deploy/k8s/base`
+- Local overlay: `deploy/k8s/overlays/local`
+- Prod overlay: `deploy/k8s/overlays/prod`
+
+This baseline deploys only the runtime web application workload. PostgreSQL, Kafka, Prometheus, and Grafana stay outside the cluster scope for this roadmap step and must be provided as external dependencies through the overlay `ConfigMap` and `Secret` inputs.
+
+See [deploy/k8s/README.md](/home/honeybadger/itmo/ToDo-DevOps/deploy/k8s/README.md) for render/apply/check commands and the expected image/tag and environment configuration workflow.
+
 ## Test profile
 
 `test` is implemented in `apps/web-app/src/test/resources/application-test.yml` on purpose. It keeps test-only actuator defaults alongside the integration tests, is activated by `@ActiveProfiles("test")`, and is not shipped in the runtime artifact.

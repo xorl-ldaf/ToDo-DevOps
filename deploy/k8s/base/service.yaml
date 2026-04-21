@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-web-app
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: todo-web-app
+    app.kubernetes.io/component: web-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
