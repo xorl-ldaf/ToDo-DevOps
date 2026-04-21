@@ -5,7 +5,7 @@ build/
 
 .idea/
 *.iml
-out/
+/out/
 
 *.log
 
