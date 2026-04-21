@@ -1,9 +1,11 @@
 package com.example.todo.application.service;
 
 import com.example.todo.application.command.CreateReminderCommand;
+import com.example.todo.application.event.ReminderScheduledEventV1;
 import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.out.LoadTaskPort;
+import com.example.todo.application.port.out.PublishReminderScheduledEventPort;
 import com.example.todo.application.port.out.SaveReminderPort;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderStatus;
@@ -43,11 +45,19 @@ class CreateReminderServiceTest {
     @Mock
     private SaveReminderPort saveReminderPort;
 
+    @Mock
+    private PublishReminderScheduledEventPort publishReminderScheduledEventPort;
+
     private CreateReminderService service;
 
     @BeforeEach
     void setUp() {
-        service = new CreateReminderService(loadTaskPort, saveReminderPort, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new CreateReminderService(
+                loadTaskPort,
+                saveReminderPort,
+                publishReminderScheduledEventPort,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
     }
 
     @Test
@@ -60,12 +70,16 @@ class CreateReminderServiceTest {
         Reminder createdReminder = service.createReminder(new CreateReminderCommand(taskId, remindAt));
 
         ArgumentCaptor<Reminder> reminderCaptor = ArgumentCaptor.forClass(Reminder.class);
-        InOrder inOrder = inOrder(loadTaskPort, saveReminderPort);
+        ArgumentCaptor<ReminderScheduledEventV1> eventCaptor = ArgumentCaptor.forClass(ReminderScheduledEventV1.class);
+        InOrder inOrder = inOrder(loadTaskPort, saveReminderPort, publishReminderScheduledEventPort);
         inOrder.verify(loadTaskPort).loadById(taskId);
         inOrder.verify(saveReminderPort).save(reminderCaptor.capture());
+        inOrder.verify(publishReminderScheduledEventPort).publish(eventCaptor.capture());
         verifyNoMoreInteractions(loadTaskPort, saveReminderPort);
+        verifyNoMoreInteractions(publishReminderScheduledEventPort);
 
         Reminder savedReminder = reminderCaptor.getValue();
+        ReminderScheduledEventV1 publishedEvent = eventCaptor.getValue();
         assertEquals(taskId, createdReminder.getTaskId());
         assertEquals(remindAt, createdReminder.getRemindAt());
         assertEquals(ReminderStatus.PENDING, createdReminder.getStatus());
@@ -76,6 +90,14 @@ class CreateReminderServiceTest {
         assertEquals(taskId, savedReminder.getTaskId());
         assertEquals(remindAt, savedReminder.getRemindAt());
         assertEquals(ReminderStatus.PENDING, savedReminder.getStatus());
+
+        assertEquals(ReminderScheduledEventV1.EVENT_TYPE, publishedEvent.eventType());
+        assertEquals(ReminderScheduledEventV1.EVENT_VERSION, publishedEvent.eventVersion());
+        assertEquals(NOW, publishedEvent.occurredAt());
+        assertEquals(createdReminder.getId().value(), publishedEvent.reminderId());
+        assertEquals(taskId.value(), publishedEvent.taskId());
+        assertEquals(remindAt, publishedEvent.remindAt());
+        assertEquals(ReminderStatus.PENDING.name(), publishedEvent.status());
     }
 
     @Test
@@ -87,6 +109,7 @@ class CreateReminderServiceTest {
 
         assertEquals("taskId must not be null", exception.getMessage());
         verifyNoInteractions(loadTaskPort, saveReminderPort);
+        verifyNoInteractions(publishReminderScheduledEventPort);
     }
 
     @Test
@@ -98,6 +121,7 @@ class CreateReminderServiceTest {
 
         assertEquals("remindAt must not be null", exception.getMessage());
         verifyNoInteractions(loadTaskPort, saveReminderPort);
+        verifyNoInteractions(publishReminderScheduledEventPort);
     }
 
     @Test
@@ -113,7 +137,7 @@ class CreateReminderServiceTest {
         assertEquals("task not found: " + taskId.value(), exception.getMessage());
         verify(loadTaskPort).loadById(taskId);
         verifyNoMoreInteractions(loadTaskPort);
-        verifyNoInteractions(saveReminderPort);
+        verifyNoInteractions(saveReminderPort, publishReminderScheduledEventPort);
     }
 
     @Test
@@ -129,7 +153,7 @@ class CreateReminderServiceTest {
         assertEquals("remindAt must not be in the past", exception.getMessage());
         verify(loadTaskPort).loadById(taskId);
         verifyNoMoreInteractions(loadTaskPort);
-        verifyNoInteractions(saveReminderPort);
+        verifyNoInteractions(saveReminderPort, publishReminderScheduledEventPort);
     }
 
     private Task task(TaskId taskId) {

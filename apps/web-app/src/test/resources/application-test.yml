@@ -1,3 +1,7 @@
+todo:
+  kafka:
+    enabled: false
+
 management:
   endpoints:
     web:

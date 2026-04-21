@@ -23,6 +23,8 @@ dependencies {
 
     implementation(project(":core:application"))
     implementation(project(":adapters:out:persistence-jpa"))
+    implementation(project(":adapters:out:messaging-kafka"))
+    implementation(project(":adapters:in:messaging-kafka"))
     implementation(project(":adapters:in:web-rest"))
 
     implementation(libs.spring.boot.starter)
@@ -30,6 +32,9 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.jackson.databind)
+    implementation(libs.jackson.datatype.jsr310)
+    implementation(libs.spring.kafka)
     runtimeOnly(libs.micrometer.registry.prometheus)
 
     runtimeOnly(libs.postgresql)
@@ -37,6 +42,7 @@ dependencies {
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.kafka)
     testImplementation(libs.testcontainers.postgresql)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

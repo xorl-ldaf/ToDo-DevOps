@@ -32,6 +32,7 @@ services:
       TODO_DB_NAME: ${TODO_DB_NAME:-todo}
       TODO_DB_USERNAME: ${TODO_DB_USERNAME:-postgres}
       TODO_DB_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
+      TODO_KAFKA_ENABLED: "false"
 
     ports:
       - "18080:8080"

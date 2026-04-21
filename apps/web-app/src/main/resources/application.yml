@@ -20,6 +20,16 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${TODO_KAFKA_BOOTSTRAP_SERVERS:${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}}
+
+todo:
+  kafka:
+    enabled: ${TODO_KAFKA_ENABLED:false}
+    bootstrap-servers: ${TODO_KAFKA_BOOTSTRAP_SERVERS:${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}}
+    consumer-group-id: ${TODO_KAFKA_CONSUMER_GROUP_ID:todo-web-app-reminder-scheduled-v1}
+    topics:
+      reminder-scheduled-v1: ${TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1:todo.reminder.scheduled.v1}
 
 management:
   endpoint:

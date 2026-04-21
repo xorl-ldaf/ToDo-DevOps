@@ -22,6 +22,34 @@ services:
       retries: 10
       start_period: 15s
 
+  kafka:
+    image: bitnami/kafka:4.0.0
+    container_name: todo-kafka
+    restart: unless-stopped
+
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:${TODO_KAFKA_HOST_PORT:-9094}
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_KRAFT_CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+
+    ports:
+      - "${TODO_KAFKA_HOST_PORT:-9094}:9094"
+
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
   app:
     build:
       context: .
@@ -33,6 +61,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
 
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
@@ -43,6 +73,10 @@ services:
       TODO_DB_NAME: ${TODO_DB_NAME:-todo}
       TODO_DB_USERNAME: ${TODO_DB_USERNAME:-postgres}
       TODO_DB_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
+      TODO_KAFKA_ENABLED: ${TODO_KAFKA_ENABLED:-true}
+      TODO_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1: ${TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1:-todo.reminder.scheduled.v1}
+      TODO_KAFKA_CONSUMER_GROUP_ID: ${TODO_KAFKA_CONSUMER_GROUP_ID:-todo-web-app-reminder-scheduled-v1}
 
     ports:
       - "${TODO_APP_HOST_PORT:-8080}:${TODO_APP_SERVER_PORT:-8080}"

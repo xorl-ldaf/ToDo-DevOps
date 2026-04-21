@@ -17,6 +17,7 @@ import com.example.todo.application.port.in.ListTasksUseCase;
 import com.example.todo.application.port.in.ListUsersUseCase;
 import com.example.todo.application.port.in.ScanDueRemindersUseCase;
 import com.example.todo.application.port.out.PublishReminderEventPort;
+import com.example.todo.application.port.out.PublishReminderScheduledEventPort;
 import com.example.todo.application.service.AssignTaskService;
 import com.example.todo.application.service.CreateReminderService;
 import com.example.todo.application.service.CreateTaskService;
@@ -122,9 +123,10 @@ public class BeanConfig {
     CreateReminderUseCase createReminderUseCase(
             TaskPersistenceAdapter taskAdapter,
             ReminderPersistenceAdapter reminderAdapter,
+            PublishReminderScheduledEventPort publishReminderScheduledEventPort,
             Clock clock
     ) {
-        return new CreateReminderService(taskAdapter, reminderAdapter, clock);
+        return new CreateReminderService(taskAdapter, reminderAdapter, publishReminderScheduledEventPort, clock);
     }
 
     @Bean

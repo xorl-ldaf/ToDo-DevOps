@@ -6,6 +6,8 @@ import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.domain.shared.exception.DomainValidationException;
 import com.example.todo.domain.shared.exception.InvalidStateTransitionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -21,6 +23,7 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException ex) {
@@ -76,6 +79,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception ex) {
+        log.error("Unexpected error while handling request", ex);
         return build(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "unexpected internal error",
