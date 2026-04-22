@@ -63,6 +63,8 @@ class ReminderKafkaIntegrationTest {
         registry.add("todo.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
         registry.add("todo.kafka.consumer-group-id", () -> CONSUMER_GROUP_ID);
         registry.add("todo.kafka.topics.reminder-scheduled-v1", () -> TOPIC);
+        registry.add("todo.kafka.outbox.initial-delay", () -> "100ms");
+        registry.add("todo.kafka.outbox.fixed-delay", () -> "100ms");
     }
 
     @Autowired
@@ -104,6 +106,13 @@ class ReminderKafkaIntegrationTest {
                 .timer();
         assertNotNull(lagTimer);
         assertEquals(1L, lagTimer.count());
+
+        Integer storedReceipts = jdbcTemplate.queryForObject(
+                "select count(*) from reminder_scheduled_event_receipts where topic = ?",
+                Integer.class,
+                TOPIC
+        );
+        assertEquals(1, storedReceipts);
     }
 
     private Counter awaitCounter(String name, String topic, String eventVersion) throws InterruptedException {

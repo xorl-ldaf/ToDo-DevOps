@@ -71,6 +71,7 @@ public final class KafkaReminderScheduledEventPublisher implements PublishRemind
                     topicName,
                     exception
             );
+            throw new IllegalStateException("Kafka reminder scheduled event publish failed", exception);
         }
     }
 }

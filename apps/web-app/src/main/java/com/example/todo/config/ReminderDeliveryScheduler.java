@@ -1,6 +1,7 @@
 package com.example.todo.config;
 
 import com.example.todo.application.port.in.ScanDueRemindersUseCase;
+import com.example.todo.application.port.in.ReminderProcessingReport;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,11 +36,23 @@ public final class ReminderDeliveryScheduler {
     )
     public void deliverDueReminders() {
         try {
-            int deliveredCount = scanDueRemindersUseCase.scanAndPublishDueReminders(clock.instant());
+            ReminderProcessingReport report = scanDueRemindersUseCase.scanAndPublishDueReminders(clock.instant());
             meterRegistry.counter("todo.reminder.delivery.scans", "outcome", "success").increment();
-            meterRegistry.counter("todo.reminder.delivery.delivered", "channel", "telegram").increment(deliveredCount);
-            if (deliveredCount > 0) {
-                log.info("Delivered {} due reminder notification(s) via outbound adapters", deliveredCount);
+            meterRegistry.counter("todo.reminder.delivery.claimed").increment(report.claimedCount());
+            meterRegistry.counter("todo.reminder.delivery.results", "outcome", "delivered").increment(report.deliveredCount());
+            meterRegistry.counter("todo.reminder.delivery.results", "outcome", "retried").increment(report.retriedCount());
+            meterRegistry.counter("todo.reminder.delivery.results", "outcome", "failed").increment(report.failedCount());
+            meterRegistry.counter("todo.reminder.delivery.results", "outcome", "conflict")
+                    .increment(report.concurrencyConflictCount());
+            if (report.claimedCount() > 0) {
+                log.info(
+                        "Processed due reminders claimed={} delivered={} retried={} failed={} conflicts={}",
+                        report.claimedCount(),
+                        report.deliveredCount(),
+                        report.retriedCount(),
+                        report.failedCount(),
+                        report.concurrencyConflictCount()
+                );
             }
         } catch (RuntimeException exception) {
             meterRegistry.counter("todo.reminder.delivery.scans", "outcome", "failure").increment();

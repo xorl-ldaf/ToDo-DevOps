@@ -1,11 +1,17 @@
 package com.example.todo.config;
 
 import com.example.todo.adapter.out.persistence.adapter.ReminderPersistenceAdapter;
+import com.example.todo.adapter.out.persistence.adapter.ReminderScheduledEventOutboxPersistenceAdapter;
+import com.example.todo.adapter.out.persistence.adapter.ReminderScheduledEventReceiptPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.adapter.TaskPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.adapter.UserPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.repository.SpringDataReminderRepository;
+import com.example.todo.adapter.out.persistence.repository.SpringDataReminderScheduledEventOutboxRepository;
+import com.example.todo.adapter.out.persistence.repository.SpringDataReminderScheduledEventReceiptRepository;
 import com.example.todo.adapter.out.persistence.repository.SpringDataTaskRepository;
 import com.example.todo.adapter.out.persistence.repository.SpringDataUserRepository;
+import com.example.todo.application.port.in.FlushReminderScheduledEventOutboxUseCase;
+import com.example.todo.application.port.in.RecordReminderScheduledEventReceiptUseCase;
 import com.example.todo.application.port.in.AssignTaskUseCase;
 import com.example.todo.application.port.in.CreateReminderUseCase;
 import com.example.todo.application.port.in.CreateTaskUseCase;
@@ -18,21 +24,27 @@ import com.example.todo.application.port.in.ListUsersUseCase;
 import com.example.todo.application.port.in.ScanDueRemindersUseCase;
 import com.example.todo.application.port.out.DeliverReminderNotificationPort;
 import com.example.todo.application.port.out.PublishReminderScheduledEventPort;
+import com.example.todo.application.port.out.StoreReminderScheduledEventPort;
 import com.example.todo.application.service.AssignTaskService;
 import com.example.todo.application.service.CreateReminderService;
 import com.example.todo.application.service.CreateTaskService;
 import com.example.todo.application.service.CreateUserService;
+import com.example.todo.application.service.FlushReminderScheduledEventOutboxService;
 import com.example.todo.application.service.GetTaskService;
 import com.example.todo.application.service.GetUserService;
 import com.example.todo.application.service.ListTaskRemindersService;
 import com.example.todo.application.service.ListTasksService;
 import com.example.todo.application.service.ListUsersService;
+import com.example.todo.application.service.RecordReminderScheduledEventReceiptService;
 import com.example.todo.application.service.ScanDueRemindersService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.Clock;
+import java.util.UUID;
 
 @Configuration
 public class BeanConfig {
@@ -54,10 +66,26 @@ public class BeanConfig {
 
     @Bean
     ReminderPersistenceAdapter reminderPersistenceAdapter(
-            SpringDataReminderRepository repository,
-            TodoReminderDeliveryProperties reminderDeliveryProperties
+            SpringDataReminderRepository repository
     ) {
-        return new ReminderPersistenceAdapter(repository, reminderDeliveryProperties.requireBatchSize());
+        return new ReminderPersistenceAdapter(repository);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "todo.kafka", name = "enabled", havingValue = "true")
+    ReminderScheduledEventOutboxPersistenceAdapter reminderScheduledEventOutboxPersistenceAdapter(
+            SpringDataReminderScheduledEventOutboxRepository repository,
+            ObjectMapper objectMapper
+    ) {
+        return new ReminderScheduledEventOutboxPersistenceAdapter(repository, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "todo.kafka", name = "enabled", havingValue = "true")
+    ReminderScheduledEventReceiptPersistenceAdapter reminderScheduledEventReceiptPersistenceAdapter(
+            SpringDataReminderScheduledEventReceiptRepository repository
+    ) {
+        return new ReminderScheduledEventReceiptPersistenceAdapter(repository);
     }
 
     @Bean
@@ -91,23 +119,26 @@ public class BeanConfig {
             ReminderPersistenceAdapter reminderAdapter,
             TaskPersistenceAdapter taskAdapter,
             UserPersistenceAdapter userAdapter,
-            DeliverReminderNotificationPort deliverReminderNotificationPort
+            DeliverReminderNotificationPort deliverReminderNotificationPort,
+            TodoReminderDeliveryProperties reminderDeliveryProperties
     ) {
         return new ScanDueRemindersService(
                 reminderAdapter,
                 taskAdapter,
                 userAdapter,
                 deliverReminderNotificationPort,
-                reminderAdapter
+                reminderAdapter,
+                processorId("reminder-delivery"),
+                reminderDeliveryProperties.requireBatchSize(),
+                reminderDeliveryProperties.requireMaxAttempts(),
+                reminderDeliveryProperties.requireRetryBackoff(),
+                reminderDeliveryProperties.requireProcessingTimeout()
         );
     }
 
     @Bean
-    ScanDueRemindersUseCase scanDueRemindersUseCase(
-            ScanDueRemindersService delegate,
-            PlatformTransactionManager transactionManager
-    ) {
-        return new TransactionalScanDueRemindersUseCase(delegate, transactionManager);
+    ScanDueRemindersUseCase scanDueRemindersUseCase(ScanDueRemindersService delegate) {
+        return delegate;
     }
 
     @Bean
@@ -134,10 +165,14 @@ public class BeanConfig {
     CreateReminderUseCase createReminderUseCase(
             TaskPersistenceAdapter taskAdapter,
             ReminderPersistenceAdapter reminderAdapter,
-            PublishReminderScheduledEventPort publishReminderScheduledEventPort,
+            StoreReminderScheduledEventPort storeReminderScheduledEventPort,
+            PlatformTransactionManager transactionManager,
             Clock clock
     ) {
-        return new CreateReminderService(taskAdapter, reminderAdapter, publishReminderScheduledEventPort, clock);
+        return new TransactionalCreateReminderUseCase(
+                new CreateReminderService(taskAdapter, reminderAdapter, storeReminderScheduledEventPort, clock),
+                transactionManager
+        );
     }
 
     @Bean
@@ -146,5 +181,36 @@ public class BeanConfig {
             ReminderPersistenceAdapter reminderAdapter
     ) {
         return new ListTaskRemindersService(taskAdapter, reminderAdapter);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "todo.kafka", name = "enabled", havingValue = "true")
+    FlushReminderScheduledEventOutboxUseCase flushReminderScheduledEventOutboxUseCase(
+            ReminderScheduledEventOutboxPersistenceAdapter outboxAdapter,
+            PublishReminderScheduledEventPort publishReminderScheduledEventPort,
+            TodoKafkaProperties kafkaProperties
+    ) {
+        return new FlushReminderScheduledEventOutboxService(
+                outboxAdapter,
+                outboxAdapter,
+                publishReminderScheduledEventPort,
+                processorId("kafka-outbox"),
+                kafkaProperties.getOutbox().getBatchSize(),
+                kafkaProperties.getOutbox().getMaxAttempts(),
+                kafkaProperties.getOutbox().getRetryBackoff(),
+                kafkaProperties.getOutbox().getProcessingTimeout()
+        );
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "todo.kafka", name = "enabled", havingValue = "true")
+    RecordReminderScheduledEventReceiptUseCase recordReminderScheduledEventReceiptUseCase(
+            ReminderScheduledEventReceiptPersistenceAdapter receiptAdapter
+    ) {
+        return new RecordReminderScheduledEventReceiptService(receiptAdapter);
+    }
+
+    private String processorId(String prefix) {
+        return prefix + "-" + UUID.randomUUID();
     }
 }

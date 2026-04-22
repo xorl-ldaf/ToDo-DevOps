@@ -3,6 +3,8 @@ package com.example.todo.adapter.in.kafka;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.todo.application.event.ReminderScheduledEventV1;
+import com.example.todo.application.port.in.RecordReminderScheduledEventReceiptUseCase;
+import com.example.todo.application.receipt.ReminderScheduledEventReceipt;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,15 +22,21 @@ public final class KafkaReminderScheduledEventConsumer {
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
     private final Clock clock;
+    private final RecordReminderScheduledEventReceiptUseCase recordReminderScheduledEventReceiptUseCase;
 
     public KafkaReminderScheduledEventConsumer(
             ObjectMapper objectMapper,
             MeterRegistry meterRegistry,
-            Clock clock
+            Clock clock,
+            RecordReminderScheduledEventReceiptUseCase recordReminderScheduledEventReceiptUseCase
     ) {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.recordReminderScheduledEventReceiptUseCase = Objects.requireNonNull(
+                recordReminderScheduledEventReceiptUseCase,
+                "recordReminderScheduledEventReceiptUseCase must not be null"
+        );
     }
 
     @KafkaListener(
@@ -41,7 +49,9 @@ public final class KafkaReminderScheduledEventConsumer {
     public void consume(
             String payload,
             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
-            @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) String key
+            @Header(name = KafkaHeaders.RECEIVED_KEY, required = false) String key,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset
     ) {
         String actualPayload = Objects.requireNonNull(payload, "payload must not be null");
         ReminderScheduledEventV1 actualEvent;
@@ -66,14 +76,37 @@ public final class KafkaReminderScheduledEventConsumer {
             ).record(consumeLag);
         }
 
+        boolean recorded = recordReminderScheduledEventReceiptUseCase.record(
+                new ReminderScheduledEventReceipt(
+                        actualEvent.eventId(),
+                        actualEvent.reminderId(),
+                        actualEvent.taskId(),
+                        topic,
+                        actualEvent.eventVersion(),
+                        actualEvent.occurredAt(),
+                        clock.instant(),
+                        partition,
+                        offset,
+                        actualPayload
+                )
+        );
+        meterRegistry.counter(
+                "todo.reminder.scheduled.events.receipts",
+                "topic", topic,
+                "outcome", recorded ? "stored" : "duplicate"
+        ).increment();
+
         log.info(
-                "Consumed reminder scheduled event eventId={} reminderId={} taskId={} topic={} key={} remindAt={}",
+                "Consumed reminder scheduled event eventId={} reminderId={} taskId={} topic={} key={} partition={} offset={} remindAt={} recorded={}",
                 actualEvent.eventId(),
                 actualEvent.reminderId(),
                 actualEvent.taskId(),
                 topic,
                 key,
-                actualEvent.remindAt()
+                partition,
+                offset,
+                actualEvent.remindAt(),
+                recorded
         );
     }
 }

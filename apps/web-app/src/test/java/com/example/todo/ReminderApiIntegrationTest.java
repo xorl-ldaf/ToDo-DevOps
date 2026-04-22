@@ -84,10 +84,10 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.id", notNullValue()))
                 .andExpect(jsonPath("$.taskId", is(taskId)))
                 .andExpect(jsonPath("$.remindAt", is(VALID_REMIND_AT.toString())))
-                .andExpect(jsonPath("$.status", is("PENDING")))
+                .andExpect(jsonPath("$.status", is("SCHEDULED")))
                 .andExpect(jsonPath("$.createdAt", is(INITIAL_TIME.toString())))
                 .andExpect(jsonPath("$.updatedAt", is(INITIAL_TIME.toString())))
-                .andExpect(jsonPath("$.sentAt").doesNotExist());
+                .andExpect(jsonPath("$.deliveredAt").doesNotExist());
     }
 
     @Test
@@ -101,10 +101,10 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$[0].id", is(reminderId)))
                 .andExpect(jsonPath("$[0].taskId", is(taskId)))
                 .andExpect(jsonPath("$[0].remindAt", is(VALID_REMIND_AT.toString())))
-                .andExpect(jsonPath("$[0].status", is("PENDING")))
+                .andExpect(jsonPath("$[0].status", is("SCHEDULED")))
                 .andExpect(jsonPath("$[0].createdAt", is(INITIAL_TIME.toString())))
                 .andExpect(jsonPath("$[0].updatedAt", is(INITIAL_TIME.toString())))
-                .andExpect(jsonPath("$[0].sentAt").doesNotExist());
+                .andExpect(jsonPath("$[0].deliveredAt").doesNotExist());
     }
 
     @Test

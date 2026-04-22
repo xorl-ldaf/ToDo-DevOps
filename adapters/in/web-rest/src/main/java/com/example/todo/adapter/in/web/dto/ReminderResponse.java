@@ -10,6 +10,6 @@ public record ReminderResponse(
         ReminderStatusDto status,
         Instant createdAt,
         Instant updatedAt,
-        Instant sentAt
+        Instant deliveredAt
 ) {
 }

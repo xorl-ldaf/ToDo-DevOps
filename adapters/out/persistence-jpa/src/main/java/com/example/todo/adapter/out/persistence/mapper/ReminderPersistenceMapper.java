@@ -18,7 +18,12 @@ public final class ReminderPersistenceMapper {
         entity.setStatus(reminder.getStatus());
         entity.setCreatedAt(reminder.getCreatedAt());
         entity.setUpdatedAt(reminder.getUpdatedAt());
-        entity.setSentAt(reminder.getSentAt());
+        entity.setNextAttemptAt(reminder.getNextAttemptAt());
+        entity.setProcessingStartedAt(reminder.getProcessingStartedAt());
+        entity.setProcessingOwner(reminder.getProcessingOwner());
+        entity.setDeliveredAt(reminder.getDeliveredAt());
+        entity.setDeliveryAttempts(reminder.getDeliveryAttempts());
+        entity.setLastFailureReason(reminder.getLastFailureReason());
         return entity;
     }
 
@@ -30,7 +35,12 @@ public final class ReminderPersistenceMapper {
                 entity.getStatus(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
-                entity.getSentAt()
+                entity.getNextAttemptAt(),
+                entity.getProcessingStartedAt(),
+                entity.getProcessingOwner(),
+                entity.getDeliveredAt(),
+                entity.getDeliveryAttempts(),
+                entity.getLastFailureReason()
         );
     }
 }

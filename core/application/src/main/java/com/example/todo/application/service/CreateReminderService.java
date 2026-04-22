@@ -6,8 +6,8 @@ import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.CreateReminderUseCase;
 import com.example.todo.application.port.out.LoadTaskPort;
-import com.example.todo.application.port.out.PublishReminderScheduledEventPort;
 import com.example.todo.application.port.out.SaveReminderPort;
+import com.example.todo.application.port.out.StoreReminderScheduledEventPort;
 import com.example.todo.domain.reminder.Reminder;
 
 import java.time.Clock;
@@ -17,20 +17,20 @@ import java.util.UUID;
 public class CreateReminderService implements CreateReminderUseCase {
     private final LoadTaskPort loadTaskPort;
     private final SaveReminderPort saveReminderPort;
-    private final PublishReminderScheduledEventPort publishReminderScheduledEventPort;
+    private final StoreReminderScheduledEventPort storeReminderScheduledEventPort;
     private final Clock clock;
 
     public CreateReminderService(
             LoadTaskPort loadTaskPort,
             SaveReminderPort saveReminderPort,
-            PublishReminderScheduledEventPort publishReminderScheduledEventPort,
+            StoreReminderScheduledEventPort storeReminderScheduledEventPort,
             Clock clock
     ) {
         this.loadTaskPort = Objects.requireNonNull(loadTaskPort, "loadTaskPort must not be null");
         this.saveReminderPort = Objects.requireNonNull(saveReminderPort, "saveReminderPort must not be null");
-        this.publishReminderScheduledEventPort = Objects.requireNonNull(
-                publishReminderScheduledEventPort,
-                "publishReminderScheduledEventPort must not be null"
+        this.storeReminderScheduledEventPort = Objects.requireNonNull(
+                storeReminderScheduledEventPort,
+                "storeReminderScheduledEventPort must not be null"
         );
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
@@ -57,7 +57,7 @@ public class CreateReminderService implements CreateReminderUseCase {
         );
 
         Reminder savedReminder = saveReminderPort.save(reminder);
-        publishReminderScheduledEventPort.publish(new ReminderScheduledEventV1(
+        storeReminderScheduledEventPort.store(new ReminderScheduledEventV1(
                 UUID.randomUUID(),
                 ReminderScheduledEventV1.EVENT_TYPE,
                 ReminderScheduledEventV1.EVENT_VERSION,

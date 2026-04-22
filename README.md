@@ -1,15 +1,18 @@
 # ToDo-DevOps
 
-ToDo-DevOps is a portfolio project built around a Java/Spring Boot application with a deliberate DevOps focus. The codebase follows onion/hexagonal structure, keeps business logic in `core/*`, isolates infrastructure behind ports and adapters, and adds operational baselines for packaging, observability, security, and deployment.
+ToDo-DevOps is a portfolio project built around a Java/Spring Boot application with a deliberate DevOps focus. The codebase keeps domain and application logic inside `core/*`, isolates infrastructure behind ports/adapters, and treats delivery, observability, and deployment concerns as first-class engineering concerns instead of postscript tooling.
 
-## What is implemented in this checkout
+## What is implemented
 
 - REST API for users, tasks, and task reminders.
 - PostgreSQL persistence with Flyway migrations.
-- Kafka reminder scheduling integration behind explicit ports/adapters.
-- Telegram reminder delivery as a real outbound adapter.
+- Reminder lifecycle with explicit states: `SCHEDULED`, `PROCESSING`, `DELIVERED`, `FAILED`.
+- Reminder delivery worker with short DB transactions, claim/process/finalize stages, retry scheduling, and lease-based concurrency control.
+- Kafka `ReminderScheduledEventV1` integration with an outbox-backed publication contract.
+- Kafka consumer path with idempotent receipt persistence for audit/reconciliation.
+- Telegram outbound adapter with timeout discipline and single-attempt failure classification.
 - Docker Compose local stack with Postgres, Kafka, Prometheus, and Grafana.
-- Kubernetes manifests with `base`, `local`, and `prod` Kustomize overlays.
+- Kubernetes manifests with Kustomize overlays, pod hardening baseline, PDB, and placement hints.
 - GitHub Actions CI plus a separate manual deploy workflow.
 - Image scanning, SBOM generation, signing, and attestation verification.
 
@@ -25,17 +28,11 @@ adapters/in/web-rest        adapters/in/messaging-kafka
                            |
                          domain
                            |
-        +------------------+------------------+
-        |                  |                  |
-        v                  v                  v
-adapters/out/persistence   adapters/out       adapters/out
--jpa                       /messaging-kafka   /messaging-telegram
-                           |
-                           v
-                     external infrastructure
-
-apps/web-app = Spring Boot wiring, runtime config, scheduler, bootstrapping
-deploy/ + observability/ + .github/workflows/ = operational baseline
+        +------------------+------------------+-------------------+
+        |                  |                  |                   |
+        v                  v                  v                   v
+adapters/out/persistence   adapters/out       adapters/out        apps/web-app
+-jpa                       /messaging-kafka   /messaging-telegram runtime wiring
 ```
 
 Module layout follows the actual Gradle build:
@@ -50,6 +47,39 @@ Module layout follows the actual Gradle build:
 - `apps/web-app`
 
 More detail is in [docs/architecture.md](docs/architecture.md).
+
+## Reminder contracts
+
+### Reminder creation
+
+`POST /api/tasks/{taskId}/reminders` returns success only after:
+
+1. the reminder row is committed in PostgreSQL;
+2. the matching `ReminderScheduledEventV1` is committed to the outbox when Kafka integration is enabled.
+
+That means the API contract is no longer “saved in DB and best-effort Kafka publish maybe happened”. It is:
+
+- reminder is durable in the primary store;
+- if Kafka is enabled, the event is durable in the outbox and will be published asynchronously by the outbox worker;
+- the request does not claim synchronous publication to Kafka.
+
+### Reminder delivery
+
+Due reminder processing is explicitly split into:
+
+1. claim due reminders in a short transaction using `FOR UPDATE SKIP LOCKED`;
+2. perform Telegram HTTP outside the transaction;
+3. finalize as `DELIVERED`, reschedule for retry, or mark `FAILED` in a new short transaction.
+
+The worker no longer keeps row locks open during external HTTP or backoff logic.
+
+### Kafka role
+
+Kafka is kept as a real integration boundary, but it is not the delivery execution path. Its role in this checkout is:
+
+- publish durable reminder-scheduled integration events from the outbox;
+- consume them through a separate adapter;
+- persist idempotent receipt records for audit/reconciliation and metrics.
 
 ## Tech stack
 
@@ -111,8 +141,6 @@ TODO_DB_PASSWORD=postgres \
 ./gradlew :apps:web-app:bootRun
 ```
 
-`prod` mode intentionally expects database settings from the environment. Health endpoint visibility is stricter there unless you override `TODO_OBS_*`.
-
 ## Tests and verification
 
 Run the test suite:
@@ -134,10 +162,17 @@ docker compose -f compose.yaml config -q
 docker compose -f compose.smoke.yaml config -q
 ```
 
+Render Kubernetes overlays:
+
+```bash
+kubectl kustomize deploy/k8s/overlays/local
+kubectl kustomize deploy/k8s/overlays/prod
+```
+
 ## Observability, security, and deployment
 
-- Observability baseline: Spring Boot actuator, Prometheus scrape config, Grafana provisioning, and a provisioned dashboard. See [docs/observability.md](docs/observability.md).
-- Security / supply chain baseline: Trivy image scan, CycloneDX SBOM, Cosign signing, provenance attestation, SBOM attestation, and local verification script. See [docs/security-supply-chain.md](docs/security-supply-chain.md).
+- Observability baseline: Spring Boot actuator, Prometheus scrape config, Grafana provisioning, reminder/Kafka/Telegram-specific metrics, and a project-focused dashboard. See [docs/observability.md](docs/observability.md).
+- Security / supply chain baseline: Trivy image scan, CycloneDX SBOM, Cosign signing, provenance attestation, SBOM attestation, non-root container runtime, and Kubernetes workload hardening. See [docs/security-supply-chain.md](docs/security-supply-chain.md).
 - Deployment baseline: Kustomize overlays, digest-based rendering, and a manual GitHub Actions deploy workflow for Kubernetes. See [docs/deployment.md](docs/deployment.md).
 
 ## Documentation map
@@ -153,14 +188,13 @@ docker compose -f compose.smoke.yaml config -q
 - [docs/operations/runbooks/rollback-first-checks.md](docs/operations/runbooks/rollback-first-checks.md)
 - [docs/operations/runbooks/integration-troubleshooting.md](docs/operations/runbooks/integration-troubleshooting.md)
 
-## Current status and boundaries
+## Current boundaries
 
-This local checkout contains working implementations for the post-item-14 baselines around configuration/environment handling, observability, Kafka integration, Kubernetes deployment manifests, delivery/CD automation, Telegram delivery, and production hardening. The repository itself does not store a numbered roadmap file, so exact item-to-number mapping must be inferred from local commit history rather than from an in-repo roadmap document.
+This checkout is materially stronger than a CRUD sample, but it still has explicit limits:
 
-The current baseline is intentionally limited:
-
-- No in-cluster PostgreSQL, Kafka, Prometheus, or Grafana deployment.
-- No outbox pattern or exactly-once guarantee across external boundaries.
-- No centralized log aggregation or tracing stack.
-- No HPA, PodDisruptionBudget, NetworkPolicy, or secret-manager integration.
-- No claim of production-ready platform security beyond the implemented supply-chain controls.
+- no in-cluster PostgreSQL, Kafka, Prometheus, or Grafana deployment
+- no tracing stack or centralized log aggregation
+- no NetworkPolicy, HPA, or admission-controller policy set
+- no secret-manager integration
+- Telegram delivery remains at-least-once under crash-after-send-before-finalize failure modes because Telegram does not provide an idempotency key for this path
+- Kafka receipt persistence is an audit/reconciliation boundary, not a business workflow of its own

@@ -1,18 +1,19 @@
 package com.example.todo.config;
 
-import com.example.todo.application.port.in.ScanDueRemindersUseCase;
+import com.example.todo.application.command.CreateReminderCommand;
+import com.example.todo.application.port.in.CreateReminderUseCase;
+import com.example.todo.domain.reminder.Reminder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.Instant;
 import java.util.Objects;
 
-public final class TransactionalScanDueRemindersUseCase implements ScanDueRemindersUseCase {
-    private final ScanDueRemindersUseCase delegate;
+public final class TransactionalCreateReminderUseCase implements CreateReminderUseCase {
+    private final CreateReminderUseCase delegate;
     private final TransactionTemplate transactionTemplate;
 
-    public TransactionalScanDueRemindersUseCase(
-            ScanDueRemindersUseCase delegate,
+    public TransactionalCreateReminderUseCase(
+            CreateReminderUseCase delegate,
             PlatformTransactionManager transactionManager
     ) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
@@ -21,8 +22,7 @@ public final class TransactionalScanDueRemindersUseCase implements ScanDueRemind
     }
 
     @Override
-    public int scanAndPublishDueReminders(Instant now) {
-        Integer deliveredCount = transactionTemplate.execute(status -> delegate.scanAndPublishDueReminders(now));
-        return deliveredCount == null ? 0 : deliveredCount;
+    public Reminder createReminder(CreateReminderCommand command) {
+        return transactionTemplate.execute(status -> delegate.createReminder(command));
     }
 }

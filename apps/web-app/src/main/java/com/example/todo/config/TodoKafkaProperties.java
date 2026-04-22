@@ -12,6 +12,7 @@ public class TodoKafkaProperties {
     private final Topics topics = new Topics();
     private final Producer producer = new Producer();
     private final Consumer consumer = new Consumer();
+    private final Outbox outbox = new Outbox();
 
     public boolean isEnabled() {
         return enabled;
@@ -47,6 +48,10 @@ public class TodoKafkaProperties {
 
     public Consumer getConsumer() {
         return consumer;
+    }
+
+    public Outbox getOutbox() {
+        return outbox;
     }
 
     public static final class Topics {
@@ -118,6 +123,63 @@ public class TodoKafkaProperties {
 
         public void setRetryBackoff(Duration retryBackoff) {
             this.retryBackoff = retryBackoff;
+        }
+    }
+
+    public static final class Outbox {
+        private int batchSize = 25;
+        private int maxAttempts = 5;
+        private Duration retryBackoff = Duration.ofSeconds(10);
+        private Duration processingTimeout = Duration.ofSeconds(30);
+        private Duration initialDelay = Duration.ofSeconds(5);
+        private Duration fixedDelay = Duration.ofSeconds(10);
+
+        public int getBatchSize() {
+            return batchSize;
+        }
+
+        public void setBatchSize(int batchSize) {
+            this.batchSize = batchSize;
+        }
+
+        public int getMaxAttempts() {
+            return maxAttempts;
+        }
+
+        public void setMaxAttempts(int maxAttempts) {
+            this.maxAttempts = maxAttempts;
+        }
+
+        public Duration getRetryBackoff() {
+            return retryBackoff;
+        }
+
+        public void setRetryBackoff(Duration retryBackoff) {
+            this.retryBackoff = retryBackoff;
+        }
+
+        public Duration getProcessingTimeout() {
+            return processingTimeout;
+        }
+
+        public void setProcessingTimeout(Duration processingTimeout) {
+            this.processingTimeout = processingTimeout;
+        }
+
+        public Duration getInitialDelay() {
+            return initialDelay;
+        }
+
+        public void setInitialDelay(Duration initialDelay) {
+            this.initialDelay = initialDelay;
+        }
+
+        public Duration getFixedDelay() {
+            return fixedDelay;
+        }
+
+        public void setFixedDelay(Duration fixedDelay) {
+            this.fixedDelay = fixedDelay;
         }
     }
 }

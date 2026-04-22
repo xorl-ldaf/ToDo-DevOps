@@ -2,7 +2,7 @@
 
 ## Scope
 
-This repository contains supply-chain and image-publication controls around the published container image. It does not claim full production security coverage for the running system.
+This repository contains supply-chain controls around the published image and a basic workload runtime hardening baseline. It does not claim full production security coverage for the running system.
 
 What is actually present in the checkout:
 
@@ -13,8 +13,10 @@ What is actually present in the checkout:
 - GitHub provenance attestation generation and verification
 - SBOM attestation generation and verification
 - local verification helper script
+- non-root container runtime
+- Kubernetes workload security context baseline
 
-Primary implementation location:
+Primary CI implementation location:
 
 - `.github/workflows/ci.yaml`
 
@@ -35,46 +37,61 @@ This job:
 - generates a CycloneDX SBOM artifact
 - fails the pipeline on `CRITICAL` or `HIGH` vulnerabilities
 
-Artifacts produced:
-
-- `trivy-results.sarif`
-- `trivy-image-sbom.cdx.json`
-
 ### `sign-image`
 
-This job signs the published image digest with Cosign using GitHub Actions OIDC.
+Signs the published image digest with Cosign using GitHub Actions OIDC.
 
 ### `verify-signed-image`
 
-This job verifies that the signature matches the current repository workflow identity:
+Verifies that the signature matches the current repository workflow identity:
 
 - issuer: `https://token.actions.githubusercontent.com`
 - identity pattern tied to `.github/workflows/ci.yaml`
 
 ### `attest-image-provenance`
 
-This job generates provenance attestation for the published image digest and pushes the attestation to the registry.
+Generates provenance attestation for the published image digest and pushes the attestation to the registry.
 
 ### `verify-image-provenance`
 
-This job verifies provenance in two ways:
-
-- via GitHub attestation API
-- via OCI registry bundle
-
-Verification artifacts are uploaded for both checks.
+Verifies provenance via GitHub attestation API and via OCI registry bundle.
 
 ### `attest-image-sbom`
 
-This job attaches the generated CycloneDX SBOM to the published image as an attestation.
+Attaches the generated CycloneDX SBOM to the published image as an attestation.
 
 ### `verify-image-sbom-attestation`
 
-This job verifies the SBOM attestation both via GitHub API and via OCI registry bundle.
+Verifies the SBOM attestation via GitHub API and via OCI registry bundle.
+
+## Runtime hardening implemented here
+
+### Container image baseline
+
+The runtime image now:
+
+- runs as UID/GID `10001`
+- sets `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/tmp`
+- keeps writable state limited to `/tmp`
+
+### Kubernetes workload baseline
+
+The manifests now include:
+
+- pod-level `securityContext`
+- `runAsNonRoot: true`
+- fixed UID/GID
+- `allowPrivilegeEscalation: false`
+- `readOnlyRootFilesystem: true`
+- dropped Linux capabilities
+- `seccompProfile: RuntimeDefault`
+- `emptyDir` mount for `/tmp`
+- `PodDisruptionBudget`
+- anti-affinity / topology spread hints
+
+This is a meaningful workload hardening baseline, but not a full cluster security posture.
 
 ## Local verification of a published image
-
-The repository includes a helper for operators who want to verify a published image outside GitHub Actions.
 
 Example:
 
@@ -88,35 +105,21 @@ Required local tools:
 - `gh`
 - `cosign`
 
-Default verification outputs:
-
-- `build/verification/provenance-github-api.json`
-- `build/verification/provenance-oci.json`
-- `build/verification/sbom-github-api.json`
-- `build/verification/sbom-oci.json`
-
-Supported environment overrides:
-
-- `REPOSITORY`
-- `SIGNER_WORKFLOW`
-- `CERT_IDENTITY_RE`
-- `OIDC_ISSUER`
-- `OUTPUT_DIR`
-
 ## What this baseline gives you
 
 - evidence that the published image was built by this repository workflow
 - evidence that the image was signed after CI checks
 - a generated SBOM tied to the published image
 - machine-readable verification artifacts that can be archived or reviewed
+- a non-root/read-only container baseline consistent with the checked-in manifests
 
 ## What this baseline does not give you
 
 - runtime admission control in Kubernetes
 - secret rotation or secret-manager integration
 - host hardening
-- cluster hardening
+- cluster hardening beyond the workload manifest baseline
 - dependency-review policy for pull requests
 - a claim that the application is secure for production by default
 
-This is a meaningful supply-chain baseline, not a blanket security certification.
+This is a meaningful baseline, not a blanket security certification.

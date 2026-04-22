@@ -22,7 +22,35 @@ spec:
         app.kubernetes.io/component: web-app
         app.kubernetes.io/part-of: todo-devops
     spec:
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: todo-web-app
+              app.kubernetes.io/component: web-app
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: todo-web-app
+                    app.kubernetes.io/component: web-app
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: app
           image: ghcr.io/xorl-ldaf/todo-devops:latest
@@ -30,11 +58,20 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           envFrom:
             - configMapRef:
                 name: todo-web-app-config
             - secretRef:
                 name: todo-web-app-secret
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           startupProbe:
             httpGet:
               path: /actuator/health

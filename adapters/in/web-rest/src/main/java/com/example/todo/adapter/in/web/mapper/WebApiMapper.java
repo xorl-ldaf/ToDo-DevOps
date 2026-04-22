@@ -98,7 +98,7 @@ public final class WebApiMapper {
                 toDto(reminder.getStatus()),
                 reminder.getCreatedAt(),
                 reminder.getUpdatedAt(),
-                reminder.getSentAt()
+                reminder.getDeliveredAt()
         );
     }
 
@@ -135,9 +135,9 @@ public final class WebApiMapper {
 
     private static ReminderStatusDto toDto(ReminderStatus value) {
         return switch (value) {
-            case PENDING -> ReminderStatusDto.PENDING;
-            case PUBLISHED -> ReminderStatusDto.PUBLISHED;
-            case SENT -> ReminderStatusDto.SENT;
+            case SCHEDULED -> ReminderStatusDto.SCHEDULED;
+            case PROCESSING -> ReminderStatusDto.PROCESSING;
+            case DELIVERED -> ReminderStatusDto.DELIVERED;
             case FAILED -> ReminderStatusDto.FAILED;
         };
     }

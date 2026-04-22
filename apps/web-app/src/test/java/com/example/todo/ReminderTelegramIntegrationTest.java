@@ -100,9 +100,10 @@ class ReminderTelegramIntegrationTest {
         String reminderId = createReminder(taskId, REMIND_AT.toString());
 
         testClock.setInstant(REMIND_AT);
-        int deliveredCount = scanDueRemindersUseCase.scanAndPublishDueReminders(REMIND_AT);
+        com.example.todo.application.port.in.ReminderProcessingReport report =
+                scanDueRemindersUseCase.scanAndPublishDueReminders(REMIND_AT);
 
-        assertEquals(1, deliveredCount);
+        assertEquals(1, report.deliveredCount());
         String outboundBody = TELEGRAM_REQUEST_BODIES.poll(5, TimeUnit.SECONDS);
         assertNotNull(outboundBody);
         assertTrue(outboundBody.contains("\"chat_id\":123456789"));
@@ -115,7 +116,7 @@ class ReminderTelegramIntegrationTest {
                 String.class,
                 reminderId
         );
-        assertEquals("PUBLISHED", storedStatus);
+        assertEquals("DELIVERED", storedStatus);
     }
 
     private String createUser(String username, String displayName, Long telegramChatId) throws Exception {

@@ -52,9 +52,14 @@ class ListTaskRemindersServiceTest {
                 new ReminderId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")),
                 taskId,
                 NOW.plusSeconds(300),
-                ReminderStatus.PENDING,
+                ReminderStatus.SCHEDULED,
                 NOW,
                 NOW,
+                NOW.plusSeconds(300),
+                null,
+                null,
+                null,
+                0,
                 null
         );
         when(loadTaskPort.loadById(taskId)).thenReturn(Optional.of(task(taskId)));

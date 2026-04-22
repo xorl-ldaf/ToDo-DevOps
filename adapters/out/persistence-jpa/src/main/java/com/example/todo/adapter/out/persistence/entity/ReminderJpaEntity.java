@@ -21,7 +21,7 @@ import java.util.UUID;
         name = "reminders",
         indexes = {
                 @Index(name = "idx_reminders_task_id", columnList = "task_id"),
-                @Index(name = "idx_reminders_status_remind_at", columnList = "status, remind_at")
+                @Index(name = "idx_reminders_status_next_attempt_at", columnList = "status, next_attempt_at")
         }
 )
 public class ReminderJpaEntity {
@@ -46,8 +46,23 @@ public class ReminderJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @Column(name = "sent_at")
-    private Instant sentAt;
+    @Column(name = "next_attempt_at", nullable = false)
+    private Instant nextAttemptAt;
+
+    @Column(name = "processing_started_at")
+    private Instant processingStartedAt;
+
+    @Column(name = "processing_owner", length = 128)
+    private String processingOwner;
+
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+
+    @Column(name = "delivery_attempts", nullable = false)
+    private int deliveryAttempts;
+
+    @Column(name = "last_failure_reason", length = 512)
+    private String lastFailureReason;
 
     public ReminderJpaEntity() {
     }

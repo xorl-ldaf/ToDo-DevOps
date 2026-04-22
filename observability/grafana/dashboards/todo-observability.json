@@ -60,12 +60,11 @@
             ]
           },
           "unit": "none"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 5,
-        "w": 6,
+        "w": 4,
         "x": 0,
         "y": 0
       },
@@ -83,15 +82,12 @@
           "values": false
         },
         "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
+        "textMode": "auto"
       },
       "targets": [
         {
           "editorMode": "code",
           "expr": "max(up{job=\"todo-app\"})",
-          "legendFormat": "app",
-          "range": true,
           "refId": "A"
         }
       ],
@@ -106,22 +102,189 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "unit": "reqps"
-        },
-        "overrides": []
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        }
       },
       "gridPos": {
-        "h": 8,
-        "w": 9,
-        "x": 6,
+        "h": 5,
+        "w": 4,
+        "x": 4,
         "y": 0
       },
       "id": 2,
       "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(increase(todo_reminder_delivery_results_total{job=\"todo-app\", outcome=\"failed\"}[15m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Reminder Failures 15m",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(increase(todo_kafka_outbox_results_total{job=\"todo-app\", outcome=\"failed\"}[15m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Outbox Failures 15m",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_reminder_scheduled_event_consume_lag_seconds_sum{job=\"todo-app\"}[5m])) / clamp_min(sum(rate(todo_reminder_scheduled_event_consume_lag_seconds_count{job=\"todo-app\"}[5m])), 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Kafka Consume Lag Avg",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
         "legend": {
-          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
@@ -135,12 +298,17 @@
         {
           "editorMode": "code",
           "expr": "sum(rate(http_server_requests_seconds_count{job=\"todo-app\", uri!~\"/actuator.*\"}[5m]))",
-          "legendFormat": "requests/sec",
-          "range": true,
+          "legendFormat": "req/sec",
           "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"todo-app\", status=~\"5..\", uri!~\"/actuator.*\"}[5m]))",
+          "legendFormat": "5xx/sec",
+          "refId": "B"
         }
       ],
-      "title": "Request Throughput",
+      "title": "HTTP Throughput and Errors",
       "type": "timeseries"
     },
     {
@@ -154,19 +322,17 @@
             "mode": "palette-classic"
           },
           "unit": "s"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
-        "w": 9,
-        "x": 15,
-        "y": 0
+        "w": 8,
+        "x": 0,
+        "y": 5
       },
-      "id": 3,
+      "id": 6,
       "options": {
         "legend": {
-          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
@@ -181,18 +347,16 @@
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"todo-app\", uri!~\"/actuator.*\"}[5m])))",
           "legendFormat": "p95",
-          "range": true,
           "refId": "A"
         },
         {
           "editorMode": "code",
           "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"todo-app\", uri!~\"/actuator.*\"}[5m])))",
           "legendFormat": "p50",
-          "range": true,
           "refId": "B"
         }
       ],
-      "title": "HTTP Request Latency",
+      "title": "HTTP Latency",
       "type": "timeseries"
     },
     {
@@ -205,20 +369,18 @@
           "color": {
             "mode": "palette-classic"
           },
-          "unit": "reqps"
-        },
-        "overrides": []
+          "unit": "ops"
+        }
       },
       "gridPos": {
         "h": 8,
         "w": 8,
-        "x": 0,
-        "y": 8
+        "x": 8,
+        "y": 5
       },
-      "id": 4,
+      "id": 7,
       "options": {
         "legend": {
-          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
@@ -231,20 +393,12 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"todo-app\", status=~\"4..\", uri!~\"/actuator.*\"}[5m]))",
-          "legendFormat": "4xx/sec",
-          "range": true,
+          "expr": "sum(rate(todo_reminder_delivery_scans_total{job=\"todo-app\"}[5m])) by (outcome)",
+          "legendFormat": "{{outcome}}",
           "refId": "A"
-        },
-        {
-          "editorMode": "code",
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"todo-app\", status=~\"5..\", uri!~\"/actuator.*\"}[5m]))",
-          "legendFormat": "5xx/sec",
-          "range": true,
-          "refId": "B"
         }
       ],
-      "title": "HTTP Error Rate",
+      "title": "Reminder Scan Outcomes",
       "type": "timeseries"
     },
     {
@@ -257,95 +411,354 @@
           "color": {
             "mode": "palette-classic"
           },
-          "max": 100,
-          "min": 0,
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 8
-      },
-      "id": 5,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "unit": "ops"
         }
-      },
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "100 * sum(jvm_memory_used_bytes{job=\"todo-app\", area=\"heap\"}) / sum(jvm_memory_max_bytes{job=\"todo-app\", area=\"heap\"})",
-          "legendFormat": "heap used %",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "JVM Heap Usage",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "max": 100,
-          "min": 0,
-          "unit": "percent"
-        },
-        "overrides": []
       },
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 8
+        "y": 5
       },
-      "id": 6,
+      "id": 8,
       "options": {
         "legend": {
-          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
           "editorMode": "code",
-          "expr": "100 * process_cpu_usage{job=\"todo-app\"}",
-          "legendFormat": "process cpu %",
-          "range": true,
+          "expr": "sum(rate(todo_reminder_delivery_results_total{job=\"todo-app\"}[5m])) by (outcome)",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Reminder Delivery Results",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_reminder_delivery_attempts_total{job=\"todo-app\"}[5m])) by (outcome)",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Telegram Attempt Outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_reminder_delivery_attempt_duration_seconds_sum{job=\"todo-app\"}[5m])) by (outcome) / clamp_min(sum(rate(todo_reminder_delivery_attempt_duration_seconds_count{job=\"todo-app\"}[5m])) by (outcome), 1)",
+          "legendFormat": "{{outcome}} avg",
+          "refId": "A"
+        }
+      ],
+      "title": "Telegram Attempt Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 21
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_kafka_outbox_scans_total{job=\"todo-app\"}[5m])) by (outcome)",
+          "legendFormat": "scan {{outcome}}",
           "refId": "A"
         },
         {
           "editorMode": "code",
-          "expr": "100 * system_cpu_usage{job=\"todo-app\"}",
-          "legendFormat": "system cpu %",
-          "range": true,
+          "expr": "sum(rate(todo_kafka_outbox_claimed_total{job=\"todo-app\"}[5m]))",
+          "legendFormat": "claimed",
           "refId": "B"
         }
       ],
-      "title": "CPU Usage",
+      "title": "Kafka Outbox Scan Activity",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 21
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_kafka_outbox_results_total{job=\"todo-app\"}[5m])) by (outcome)",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Kafka Outbox Results",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 21
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_reminder_scheduled_events_publish_failures_total{job=\"todo-app\"}[5m])) by (reason)",
+          "legendFormat": "publish {{reason}}",
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_reminder_scheduled_events_failed_total{job=\"todo-app\"}[5m])) by (reason)",
+          "legendFormat": "consume {{reason}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Kafka Publish and Consume Failures",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 29
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_reminder_scheduled_events_consumed_total{job=\"todo-app\"}[5m])) by (event_version)",
+          "legendFormat": "consumed {{event_version}}",
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(todo_reminder_scheduled_events_receipts_total{job=\"todo-app\"}[5m])) by (outcome)",
+          "legendFormat": "receipt {{outcome}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Kafka Consume and Receipt Audit",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "bytes"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 29
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(jvm_memory_used_bytes{job=\"todo-app\", area=\"heap\"})",
+          "legendFormat": "heap used",
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(jvm_memory_max_bytes{job=\"todo-app\", area=\"heap\"})",
+          "legendFormat": "heap max",
+          "refId": "B"
+        }
+      ],
+      "title": "JVM Heap",
       "type": "timeseries"
     },
     {
@@ -359,19 +772,17 @@
             "mode": "palette-classic"
           },
           "unit": "short"
-        },
-        "overrides": []
+        }
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
+        "w": 8,
+        "x": 16,
+        "y": 29
       },
-      "id": 7,
+      "id": 16,
       "options": {
         "legend": {
-          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
@@ -386,77 +797,39 @@
           "editorMode": "code",
           "expr": "jvm_threads_live_threads{job=\"todo-app\"}",
           "legendFormat": "live threads",
-          "range": true,
           "refId": "A"
-        }
-      ],
-      "title": "JVM Threads",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "s"
         },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 16
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
         {
           "editorMode": "code",
           "expr": "process_uptime_seconds{job=\"todo-app\"}",
           "legendFormat": "uptime",
-          "range": true,
-          "refId": "A"
+          "refId": "B"
         }
       ],
-      "title": "Process Uptime",
+      "title": "JVM Threads and Uptime",
       "type": "timeseries"
     }
   ],
-  "refresh": "15s",
-  "schemaVersion": 41,
+  "refresh": "30s",
+  "schemaVersion": 39,
   "style": "dark",
   "tags": [
     "todo",
-    "observability"
+    "reminders",
+    "kafka",
+    "telegram"
   ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
-  "title": "ToDo App Observability Baseline",
-  "uid": "todo-observability-baseline",
-  "version": 1,
+  "title": "ToDo App Runtime Signals",
+  "uid": "todo-observability",
+  "version": 2,
   "weekStart": ""
 }

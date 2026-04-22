@@ -1,13 +1,14 @@
 package com.example.todo.application.service;
 
-import com.example.todo.application.notification.ReminderNotificationV1;
+import com.example.todo.application.port.in.ReminderProcessingReport;
+import com.example.todo.application.port.out.ClaimDueRemindersPort;
 import com.example.todo.application.port.out.DeliverReminderNotificationPort;
-import com.example.todo.application.port.out.LoadDueRemindersPort;
+import com.example.todo.application.port.out.FinalizeReminderDeliveryPort;
 import com.example.todo.application.port.out.LoadTaskPort;
 import com.example.todo.application.port.out.LoadUserDetailsPort;
 import com.example.todo.application.port.out.ReminderNotificationDeliveryResult;
-import com.example.todo.application.port.out.SaveReminderPort;
 import com.example.todo.domain.reminder.Reminder;
+import com.example.todo.domain.reminder.ReminderId;
 import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.shared.TelegramChatId;
 import com.example.todo.domain.task.Task;
@@ -24,22 +25,30 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ScanDueRemindersServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-04-20T10:00:00Z");
+    private static final String PROCESSOR_ID = "worker-a";
 
     @Mock
-    private LoadDueRemindersPort loadDueRemindersPort;
+    private ClaimDueRemindersPort claimDueRemindersPort;
 
     @Mock
     private LoadTaskPort loadTaskPort;
@@ -51,92 +60,65 @@ class ScanDueRemindersServiceTest {
     private DeliverReminderNotificationPort deliverReminderNotificationPort;
 
     @Mock
-    private SaveReminderPort saveReminderPort;
+    private FinalizeReminderDeliveryPort finalizeReminderDeliveryPort;
 
     private ScanDueRemindersService service;
 
     @BeforeEach
     void setUp() {
         service = new ScanDueRemindersService(
-                loadDueRemindersPort,
+                claimDueRemindersPort,
                 loadTaskPort,
                 loadUserDetailsPort,
                 deliverReminderNotificationPort,
-                saveReminderPort
+                finalizeReminderDeliveryPort,
+                PROCESSOR_ID,
+                25,
+                3,
+                Duration.ofMinutes(5),
+                Duration.ofSeconds(30)
         );
     }
 
     @Test
-    void scanAndPublishDueRemindersShouldPublishAndPersistOnlyDuePendingReminders() {
-        Reminder firstDueReminder = pendingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", NOW.minusSeconds(60));
-        Reminder secondDueReminder = pendingReminder("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", NOW);
-        Reminder futureReminder = pendingReminder("cccccccc-cccc-cccc-cccc-cccccccccccc", NOW.plusSeconds(60));
-        Reminder alreadyPublishedReminder = Reminder.restore(
-                reminderId("dddddddd-dddd-dddd-dddd-dddddddddddd"),
-                taskId("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
-                NOW.minusSeconds(30),
-                ReminderStatus.PUBLISHED,
-                NOW.minusSeconds(600),
-                NOW.minusSeconds(30),
-                null
-        );
-        when(loadDueRemindersPort.loadDueReminders(NOW)).thenReturn(
-                List.of(firstDueReminder, secondDueReminder, futureReminder, alreadyPublishedReminder)
-        );
-        when(saveReminderPort.save(any(Reminder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    void scanAndPublishDueRemindersShouldClaimDeliverAndFinalizeDeliveredReminder() {
+        Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
         User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(loadTaskPort.loadById(task.getId())).thenReturn(java.util.Optional.of(task));
-        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(java.util.Optional.of(recipient));
-        List<ReminderStatus> statusesAtDelivery = new ArrayList<>();
-        doAnswer(invocation -> {
-            ReminderNotificationV1 notification = invocation.getArgument(0);
-            statusesAtDelivery.add(firstDueReminder.getId().equals(new com.example.todo.domain.reminder.ReminderId(notification.reminderId()))
-                    ? firstDueReminder.getStatus()
-                    : secondDueReminder.getStatus());
-            return ReminderNotificationDeliveryResult.delivered();
-        }).when(deliverReminderNotificationPort).deliver(any(ReminderNotificationV1.class));
+        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of(claimedReminder));
+        when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
+        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
+        when(deliverReminderNotificationPort.deliver(any())).thenReturn(ReminderNotificationDeliveryResult.delivered());
+        when(finalizeReminderDeliveryPort.markDelivered(claimedReminder.getId(), PROCESSOR_ID, NOW)).thenReturn(true);
 
-        int publishedCount = service.scanAndPublishDueReminders(NOW);
+        ReminderProcessingReport report = service.scanAndPublishDueReminders(NOW);
 
-        ArgumentCaptor<Reminder> savedReminderCaptor = ArgumentCaptor.forClass(Reminder.class);
-        ArgumentCaptor<ReminderNotificationV1> notificationCaptor = ArgumentCaptor.forClass(ReminderNotificationV1.class);
+        ArgumentCaptor<com.example.todo.application.notification.ReminderNotificationV1> notificationCaptor =
+                ArgumentCaptor.forClass(com.example.todo.application.notification.ReminderNotificationV1.class);
         InOrder inOrder = inOrder(
-                loadDueRemindersPort,
+                claimDueRemindersPort,
                 loadTaskPort,
                 loadUserDetailsPort,
                 deliverReminderNotificationPort,
-                saveReminderPort
+                finalizeReminderDeliveryPort
         );
-        inOrder.verify(loadDueRemindersPort).loadDueReminders(NOW);
-        inOrder.verify(loadTaskPort).loadById(firstDueReminder.getTaskId());
+        inOrder.verify(claimDueRemindersPort).claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25);
+        inOrder.verify(loadTaskPort).loadById(claimedReminder.getTaskId());
         inOrder.verify(loadUserDetailsPort).loadById(task.getAssigneeId());
         inOrder.verify(deliverReminderNotificationPort).deliver(notificationCaptor.capture());
-        inOrder.verify(saveReminderPort).save(firstDueReminder);
-        inOrder.verify(loadTaskPort).loadById(secondDueReminder.getTaskId());
-        inOrder.verify(loadUserDetailsPort).loadById(task.getAssigneeId());
-        inOrder.verify(deliverReminderNotificationPort).deliver(notificationCaptor.capture());
-        inOrder.verify(saveReminderPort).save(secondDueReminder);
-        verify(saveReminderPort, times(2)).save(savedReminderCaptor.capture());
+        inOrder.verify(finalizeReminderDeliveryPort).markDelivered(claimedReminder.getId(), PROCESSOR_ID, NOW);
         verifyNoMoreInteractions(
-                loadDueRemindersPort,
+                claimDueRemindersPort,
                 loadTaskPort,
                 loadUserDetailsPort,
                 deliverReminderNotificationPort,
-                saveReminderPort
+                finalizeReminderDeliveryPort
         );
 
-        assertEquals(2, publishedCount);
-        assertEquals(List.of(ReminderStatus.PENDING, ReminderStatus.PENDING), statusesAtDelivery);
-        assertEquals(ReminderStatus.PUBLISHED, firstDueReminder.getStatus());
-        assertEquals(ReminderStatus.PUBLISHED, secondDueReminder.getStatus());
-        assertEquals(NOW, firstDueReminder.getUpdatedAt());
-        assertEquals(NOW, secondDueReminder.getUpdatedAt());
-        assertEquals(List.of(firstDueReminder, secondDueReminder), savedReminderCaptor.getAllValues());
-        assertEquals(2, notificationCaptor.getAllValues().size());
-        assertEquals(task.getId().value(), notificationCaptor.getAllValues().get(0).taskId());
-        assertEquals(recipient.getId().value(), notificationCaptor.getAllValues().get(0).recipientUserId());
-        assertEquals(recipient.getTelegramChatId().value(), notificationCaptor.getAllValues().get(0).recipientTelegramChatId());
+        assertEquals(new ReminderProcessingReport(1, 1, 0, 0, 0), report);
+        assertEquals(task.getId().value(), notificationCaptor.getValue().taskId());
+        assertEquals(recipient.getId().value(), notificationCaptor.getValue().recipientUserId());
     }
 
     @Test
@@ -148,117 +130,147 @@ class ScanDueRemindersServiceTest {
 
         assertEquals("now must not be null", exception.getMessage());
         verifyNoInteractions(
-                loadDueRemindersPort,
+                claimDueRemindersPort,
                 loadTaskPort,
                 loadUserDetailsPort,
                 deliverReminderNotificationPort,
-                saveReminderPort
+                finalizeReminderDeliveryPort
         );
     }
 
     @Test
-    void scanAndPublishDueRemindersShouldReturnZeroWhenNothingIsDue() {
-        Reminder futureReminder = pendingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", NOW.plusSeconds(60));
-        when(loadDueRemindersPort.loadDueReminders(NOW)).thenReturn(List.of(futureReminder));
+    void scanAndPublishDueRemindersShouldReturnEmptyReportWhenNothingIsClaimed() {
+        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of());
 
-        int publishedCount = service.scanAndPublishDueReminders(NOW);
+        ReminderProcessingReport report = service.scanAndPublishDueReminders(NOW);
 
-        assertEquals(0, publishedCount);
-        verify(loadDueRemindersPort).loadDueReminders(NOW);
-        verifyNoMoreInteractions(loadDueRemindersPort);
-        verifyNoInteractions(loadTaskPort, loadUserDetailsPort, deliverReminderNotificationPort, saveReminderPort);
+        assertEquals(ReminderProcessingReport.empty(), report);
+        verify(claimDueRemindersPort).claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25);
+        verifyNoMoreInteractions(claimDueRemindersPort);
+        verifyNoInteractions(loadTaskPort, loadUserDetailsPort, deliverReminderNotificationPort, finalizeReminderDeliveryPort);
     }
 
     @Test
-    void scanAndPublishDueRemindersShouldSkipWhenRecipientHasNoTelegramChat() {
-        Reminder dueReminder = pendingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", NOW.minusSeconds(60));
+    void scanAndPublishDueRemindersShouldFailReminderWhenRecipientHasNoTelegramChat() {
+        Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
         User recipient = user("11111111-1111-1111-1111-111111111111", null);
-        when(loadDueRemindersPort.loadDueReminders(NOW)).thenReturn(List.of(dueReminder));
-        when(loadTaskPort.loadById(task.getId())).thenReturn(java.util.Optional.of(task));
-        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(java.util.Optional.of(recipient));
+        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of(claimedReminder));
+        when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
+        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
+        when(finalizeReminderDeliveryPort.markFailed(
+                claimedReminder.getId(),
+                PROCESSOR_ID,
+                NOW,
+                "recipient has no telegram chat id"
+        )).thenReturn(true);
 
-        int publishedCount = service.scanAndPublishDueReminders(NOW);
+        ReminderProcessingReport report = service.scanAndPublishDueReminders(NOW);
 
-        assertEquals(0, publishedCount);
-        verify(loadDueRemindersPort).loadDueReminders(NOW);
-        verify(loadTaskPort).loadById(task.getId());
-        verify(loadUserDetailsPort).loadById(task.getAssigneeId());
-        verifyNoInteractions(deliverReminderNotificationPort, saveReminderPort);
-    }
-
-    @Test
-    void scanAndPublishDueRemindersShouldKeepReminderPendingWhenDeliveryIsSkipped() {
-        Reminder dueReminder = pendingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", NOW.minusSeconds(60));
-        Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
-        User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(loadDueRemindersPort.loadDueReminders(NOW)).thenReturn(List.of(dueReminder));
-        when(loadTaskPort.loadById(task.getId())).thenReturn(java.util.Optional.of(task));
-        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(java.util.Optional.of(recipient));
-        when(deliverReminderNotificationPort.deliver(any(ReminderNotificationV1.class)))
-                .thenReturn(ReminderNotificationDeliveryResult.skipped("telegram delivery is disabled"));
-
-        int publishedCount = service.scanAndPublishDueReminders(NOW);
-
-        assertEquals(0, publishedCount);
-        assertEquals(ReminderStatus.PENDING, dueReminder.getStatus());
-        verify(deliverReminderNotificationPort).deliver(any(ReminderNotificationV1.class));
-        verifyNoInteractions(saveReminderPort);
-    }
-
-    @Test
-    void scanAndPublishDueRemindersShouldKeepReminderPendingWhenDeliveryFailsTransiently() {
-        Reminder dueReminder = pendingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", NOW.minusSeconds(60));
-        Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
-        User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(loadDueRemindersPort.loadDueReminders(NOW)).thenReturn(List.of(dueReminder));
-        when(loadTaskPort.loadById(task.getId())).thenReturn(java.util.Optional.of(task));
-        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(java.util.Optional.of(recipient));
-        when(deliverReminderNotificationPort.deliver(any(ReminderNotificationV1.class)))
-                .thenReturn(ReminderNotificationDeliveryResult.retryableFailure("telegram timeout"));
-
-        int publishedCount = service.scanAndPublishDueReminders(NOW);
-
-        assertEquals(0, publishedCount);
-        assertEquals(ReminderStatus.PENDING, dueReminder.getStatus());
-        verify(deliverReminderNotificationPort).deliver(any(ReminderNotificationV1.class));
-        verifyNoInteractions(saveReminderPort);
-    }
-
-    @Test
-    void scanAndPublishDueRemindersShouldMarkReminderFailedWhenDeliveryFailsPermanently() {
-        Reminder dueReminder = pendingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", NOW.minusSeconds(60));
-        Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
-        User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(loadDueRemindersPort.loadDueReminders(NOW)).thenReturn(List.of(dueReminder));
-        when(loadTaskPort.loadById(task.getId())).thenReturn(java.util.Optional.of(task));
-        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(java.util.Optional.of(recipient));
-        when(deliverReminderNotificationPort.deliver(any(ReminderNotificationV1.class)))
-                .thenReturn(ReminderNotificationDeliveryResult.permanentFailure("telegram rejected chat"));
-        when(saveReminderPort.save(any(Reminder.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        int publishedCount = service.scanAndPublishDueReminders(NOW);
-
-        assertEquals(0, publishedCount);
-        assertEquals(ReminderStatus.FAILED, dueReminder.getStatus());
-        verify(deliverReminderNotificationPort).deliver(any(ReminderNotificationV1.class));
-        verify(saveReminderPort).save(dueReminder);
-    }
-
-    private Reminder pendingReminder(String reminderId, Instant remindAt) {
-        return Reminder.restore(
-                reminderId(reminderId),
-                taskId("ffffffff-ffff-ffff-ffff-ffffffffffff"),
-                remindAt,
-                ReminderStatus.PENDING,
-                NOW.minusSeconds(600),
-                NOW.minusSeconds(600),
-                null
+        assertEquals(new ReminderProcessingReport(1, 0, 0, 1, 0), report);
+        verifyNoInteractions(deliverReminderNotificationPort);
+        verify(finalizeReminderDeliveryPort).markFailed(
+                claimedReminder.getId(),
+                PROCESSOR_ID,
+                NOW,
+                "recipient has no telegram chat id"
         );
     }
 
-    private com.example.todo.domain.reminder.ReminderId reminderId(String value) {
-        return new com.example.todo.domain.reminder.ReminderId(UUID.fromString(value));
+    @Test
+    void scanAndPublishDueRemindersShouldRescheduleReminderWhenDeliveryFailsTransiently() {
+        Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
+        Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
+        User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
+        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of(claimedReminder));
+        when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
+        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
+        when(deliverReminderNotificationPort.deliver(any()))
+                .thenReturn(ReminderNotificationDeliveryResult.retryableFailure("telegram timeout"));
+        when(finalizeReminderDeliveryPort.reschedule(
+                eq(claimedReminder.getId()),
+                eq(PROCESSOR_ID),
+                eq(NOW),
+                eq(NOW.plus(Duration.ofMinutes(5))),
+                eq("telegram timeout")
+        )).thenReturn(true);
+
+        ReminderProcessingReport report = service.scanAndPublishDueReminders(NOW);
+
+        assertEquals(new ReminderProcessingReport(1, 0, 1, 0, 0), report);
+        verify(finalizeReminderDeliveryPort).reschedule(
+                claimedReminder.getId(),
+                PROCESSOR_ID,
+                NOW,
+                NOW.plus(Duration.ofMinutes(5)),
+                "telegram timeout"
+        );
+    }
+
+    @Test
+    void scanAndPublishDueRemindersShouldFailReminderWhenRetryBudgetIsExhausted() {
+        Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 2);
+        Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
+        User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
+        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of(claimedReminder));
+        when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
+        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
+        when(deliverReminderNotificationPort.deliver(any()))
+                .thenReturn(ReminderNotificationDeliveryResult.retryableFailure("telegram timeout"));
+        when(finalizeReminderDeliveryPort.markFailed(
+                claimedReminder.getId(),
+                PROCESSOR_ID,
+                NOW,
+                "telegram timeout"
+        )).thenReturn(true);
+
+        ReminderProcessingReport report = service.scanAndPublishDueReminders(NOW);
+
+        assertEquals(new ReminderProcessingReport(1, 0, 0, 1, 0), report);
+        verify(finalizeReminderDeliveryPort).markFailed(
+                claimedReminder.getId(),
+                PROCESSOR_ID,
+                NOW,
+                "telegram timeout"
+        );
+    }
+
+    @Test
+    void scanAndPublishDueRemindersShouldReportConflictWhenFinalizeReturnsFalse() {
+        Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
+        Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
+        User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
+        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of(claimedReminder));
+        when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
+        when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
+        when(deliverReminderNotificationPort.deliver(any())).thenReturn(ReminderNotificationDeliveryResult.delivered());
+        when(finalizeReminderDeliveryPort.markDelivered(claimedReminder.getId(), PROCESSOR_ID, NOW)).thenReturn(false);
+
+        ReminderProcessingReport report = service.scanAndPublishDueReminders(NOW);
+
+        assertEquals(new ReminderProcessingReport(1, 0, 0, 0, 1), report);
+    }
+
+    private Reminder processingReminder(String reminderId, int deliveryAttempts) {
+        return Reminder.restore(
+                new ReminderId(UUID.fromString(reminderId)),
+                taskId("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+                NOW.minusSeconds(60),
+                ReminderStatus.PROCESSING,
+                NOW.minusSeconds(600),
+                NOW.minusSeconds(30),
+                NOW.minusSeconds(60),
+                NOW.minusSeconds(1),
+                PROCESSOR_ID,
+                null,
+                deliveryAttempts,
+                null
+        );
     }
 
     private TaskId taskId(String value) {

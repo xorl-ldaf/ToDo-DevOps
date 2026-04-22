@@ -30,8 +30,6 @@ public class TelegramConfig {
                         .requestFactory(requestFactory)
                         .build(),
                 botToken,
-                properties.requireMaxAttempts(),
-                properties.requireRetryBackoff(),
                 meterRegistry
         );
     }

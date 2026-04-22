@@ -23,21 +23,15 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
 
     private final RestClient restClient;
     private final String botToken;
-    private final int maxAttempts;
-    private final Duration retryBackoff;
     private final MeterRegistry meterRegistry;
 
     public TelegramReminderNotificationSender(
             RestClient restClient,
             String botToken,
-            int maxAttempts,
-            Duration retryBackoff,
             MeterRegistry meterRegistry
     ) {
         this.restClient = Objects.requireNonNull(restClient, "restClient must not be null");
         this.botToken = requireText(botToken, "botToken");
-        this.maxAttempts = requirePositive(maxAttempts, "maxAttempts");
-        this.retryBackoff = requirePositive(retryBackoff, "retryBackoff");
         this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry must not be null");
     }
 
@@ -48,103 +42,57 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
                 "notification must not be null"
         );
 
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            Timer.Sample sample = Timer.start(meterRegistry);
-            try {
-                TelegramApiResponse response = restClient.post()
-                        .uri("/bot{token}/sendMessage", botToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(new TelegramSendMessageRequest(
-                                actualNotification.recipientTelegramChatId(),
-                                formatMessage(actualNotification)
-                        ))
-                        .retrieve()
-                        .body(TelegramApiResponse.class);
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            TelegramApiResponse response = restClient.post()
+                    .uri("/bot{token}/sendMessage", botToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new TelegramSendMessageRequest(
+                            actualNotification.recipientTelegramChatId(),
+                            formatMessage(actualNotification)
+                    ))
+                    .retrieve()
+                    .body(TelegramApiResponse.class);
 
-                if (response == null) {
-                    ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.retryableFailure(
-                            "telegram API returned an empty response"
-                    );
-                    recordAttempt(sample, "retryable_failure", attempt);
-                    if (attempt < maxAttempts) {
-                        if (!scheduleRetry(actualNotification, result.reason(), attempt)) {
-                            return ReminderNotificationDeliveryResult.retryableFailure(
-                                    "telegram retry interrupted during backoff"
-                            );
-                        }
-                        continue;
-                    }
-                    log.warn(
-                            "Telegram delivery exhausted retries reminderId={} attempt={} reason={}",
-                            actualNotification.reminderId(),
-                            attempt,
-                            result.reason()
-                    );
-                    return result;
-                }
-                if (!response.ok()) {
-                    ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.permanentFailure(
-                            "telegram API rejected message: " + response.description()
-                    );
-                    recordAttempt(sample, "permanent_failure", attempt);
-                    log.warn(
-                            "Telegram delivery failed permanently reminderId={} attempt={} reason={}",
-                            actualNotification.reminderId(),
-                            attempt,
-                            result.reason()
-                    );
-                    return result;
-                }
-
-                recordAttempt(sample, "delivered", attempt);
-                return ReminderNotificationDeliveryResult.delivered();
-            } catch (RestClientResponseException exception) {
-                ReminderNotificationDeliveryResult result = classifyHttpFailure(exception);
-                recordAttempt(sample, tagValue(result), attempt);
-                if (result.retryableFailure() && attempt < maxAttempts) {
-                    if (!scheduleRetry(actualNotification, result.reason(), attempt)) {
-                        return ReminderNotificationDeliveryResult.retryableFailure(
-                                "telegram retry interrupted during backoff"
-                        );
-                    }
-                    continue;
-                }
-                logFailure(actualNotification, attempt, result, exception);
-                return result;
-            } catch (ResourceAccessException exception) {
+            if (response == null) {
                 ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.retryableFailure(
-                        "telegram transport error: " + exception.getClass().getSimpleName()
+                        "telegram API returned an empty response"
                 );
-                recordAttempt(sample, "retryable_failure", attempt);
-                if (attempt < maxAttempts) {
-                    if (!scheduleRetry(actualNotification, result.reason(), attempt)) {
-                        return ReminderNotificationDeliveryResult.retryableFailure(
-                                "telegram retry interrupted during backoff"
-                        );
-                    }
-                    continue;
-                }
-                logFailure(actualNotification, attempt, result, exception);
-                return result;
-            } catch (RestClientException exception) {
-                ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.retryableFailure(
-                        "telegram client error: " + exception.getClass().getSimpleName()
-                );
-                recordAttempt(sample, "retryable_failure", attempt);
-                if (attempt < maxAttempts) {
-                    if (!scheduleRetry(actualNotification, result.reason(), attempt)) {
-                        return ReminderNotificationDeliveryResult.retryableFailure(
-                                "telegram retry interrupted during backoff"
-                        );
-                    }
-                    continue;
-                }
-                logFailure(actualNotification, attempt, result, exception);
+                recordAttempt(sample, "retryable_failure");
+                logFailure(actualNotification, result, null);
                 return result;
             }
-        }
+            if (!response.ok()) {
+                ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.permanentFailure(
+                        "telegram API rejected message: " + response.description()
+                );
+                recordAttempt(sample, "permanent_failure");
+                logFailure(actualNotification, result, null);
+                return result;
+            }
 
-        return ReminderNotificationDeliveryResult.retryableFailure("telegram delivery exhausted retries");
+            recordAttempt(sample, "delivered");
+            return ReminderNotificationDeliveryResult.delivered();
+        } catch (RestClientResponseException exception) {
+            ReminderNotificationDeliveryResult result = classifyHttpFailure(exception);
+            recordAttempt(sample, tagValue(result));
+            logFailure(actualNotification, result, exception);
+            return result;
+        } catch (ResourceAccessException exception) {
+            ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.retryableFailure(
+                    "telegram transport error: " + exception.getClass().getSimpleName()
+            );
+            recordAttempt(sample, "retryable_failure");
+            logFailure(actualNotification, result, exception);
+            return result;
+        } catch (RestClientException exception) {
+            ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.retryableFailure(
+                    "telegram client error: " + exception.getClass().getSimpleName()
+            );
+            recordAttempt(sample, "retryable_failure");
+            logFailure(actualNotification, result, exception);
+            return result;
+        }
     }
 
     private String formatMessage(ReminderNotificationV1 notification) {
@@ -175,21 +123,6 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
         return actualValue;
     }
 
-    private static int requirePositive(int value, String fieldName) {
-        if (value < 1) {
-            throw new IllegalArgumentException(fieldName + " must be at least 1");
-        }
-        return value;
-    }
-
-    private static Duration requirePositive(Duration value, String fieldName) {
-        Duration actualValue = Objects.requireNonNull(value, fieldName + " must not be null");
-        if (actualValue.isNegative() || actualValue.isZero()) {
-            throw new IllegalArgumentException(fieldName + " must be positive");
-        }
-        return actualValue;
-    }
-
     private ReminderNotificationDeliveryResult classifyHttpFailure(RestClientResponseException exception) {
         int statusCode = exception.getStatusCode().value();
         if (statusCode == 429 || statusCode >= 500) {
@@ -198,45 +131,15 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
         return ReminderNotificationDeliveryResult.permanentFailure("telegram HTTP " + statusCode);
     }
 
-    private boolean scheduleRetry(ReminderNotificationV1 notification, String reason, int attempt) {
-        meterRegistry.counter(
-                "todo.reminder.delivery.retries",
-                "channel", "telegram"
-        ).increment();
-        log.warn(
-                "Retrying Telegram delivery reminderId={} attempt={} maxAttempts={} backoffMs={} reason={}",
-                notification.reminderId(),
-                attempt,
-                maxAttempts,
-                retryBackoff.toMillis(),
-                reason
-        );
-        try {
-            Thread.sleep(retryBackoff.toMillis());
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            log.warn(
-                    "Interrupted while backing off Telegram delivery reminderId={} attempt={}",
-                    notification.reminderId(),
-                    attempt,
-                    exception
-            );
-            return false;
-        }
-        return true;
-    }
-
     private void logFailure(
             ReminderNotificationV1 notification,
-            int attempt,
             ReminderNotificationDeliveryResult result,
             Exception exception
     ) {
         if (result.permanentFailure()) {
             log.warn(
-                    "Telegram delivery failed permanently reminderId={} attempt={} reason={}",
+                    "Telegram delivery failed permanently reminderId={} reason={}",
                     notification.reminderId(),
-                    attempt,
                     result.reason(),
                     exception
             );
@@ -244,16 +147,14 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
         }
 
         log.error(
-                "Telegram delivery failed after retries reminderId={} attempt={} maxAttempts={} reason={}",
+                "Telegram delivery failed reminderId={} reason={}",
                 notification.reminderId(),
-                attempt,
-                maxAttempts,
                 result.reason(),
                 exception
         );
     }
 
-    private void recordAttempt(Timer.Sample sample, String outcome, int attempt) {
+    private void recordAttempt(Timer.Sample sample, String outcome) {
         sample.stop(meterRegistry.timer(
                 "todo.reminder.delivery.attempt.duration",
                 "channel", "telegram",
@@ -262,8 +163,7 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
         meterRegistry.counter(
                 "todo.reminder.delivery.attempts",
                 "channel", "telegram",
-                "outcome", outcome,
-                "attempt", Integer.toString(attempt)
+                "outcome", outcome
         ).increment();
     }
 

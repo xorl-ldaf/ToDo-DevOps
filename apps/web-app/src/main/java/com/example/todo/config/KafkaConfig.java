@@ -2,12 +2,15 @@ package com.example.todo.config;
 
 import com.example.todo.adapter.in.kafka.KafkaReminderScheduledEventConsumer;
 import com.example.todo.adapter.out.kafka.KafkaReminderScheduledEventPublisher;
+import com.example.todo.adapter.out.persistence.adapter.ReminderScheduledEventOutboxPersistenceAdapter;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.example.todo.application.event.ReminderScheduledEventV1;
+import com.example.todo.application.port.in.FlushReminderScheduledEventOutboxUseCase;
+import com.example.todo.application.port.in.RecordReminderScheduledEventReceiptUseCase;
 import com.example.todo.application.port.out.PublishReminderScheduledEventPort;
+import com.example.todo.application.port.out.StoreReminderScheduledEventPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -151,13 +154,39 @@ public class KafkaConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean(StoreReminderScheduledEventPort.class)
+    StoreReminderScheduledEventPort noOpStoreReminderScheduledEventPort() {
+        return new NoOpStoreReminderScheduledEventPort();
+    }
+
+    @Bean
     @ConditionalOnProperty(prefix = "todo.kafka", name = "enabled", havingValue = "true")
     KafkaReminderScheduledEventConsumer kafkaReminderScheduledEventConsumer(
             ObjectMapper objectMapper,
             MeterRegistry meterRegistry,
-            Clock clock
+            Clock clock,
+            RecordReminderScheduledEventReceiptUseCase recordReminderScheduledEventReceiptUseCase
     ) {
-        return new KafkaReminderScheduledEventConsumer(objectMapper, meterRegistry, clock);
+        return new KafkaReminderScheduledEventConsumer(
+                objectMapper,
+                meterRegistry,
+                clock,
+                recordReminderScheduledEventReceiptUseCase
+        );
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "todo.kafka", name = "enabled", havingValue = "true")
+    ReminderScheduledEventOutboxScheduler reminderScheduledEventOutboxScheduler(
+            FlushReminderScheduledEventOutboxUseCase flushReminderScheduledEventOutboxUseCase,
+            Clock clock,
+            MeterRegistry meterRegistry
+    ) {
+        return new ReminderScheduledEventOutboxScheduler(
+                flushReminderScheduledEventOutboxUseCase,
+                clock,
+                meterRegistry
+        );
     }
 
     @Bean

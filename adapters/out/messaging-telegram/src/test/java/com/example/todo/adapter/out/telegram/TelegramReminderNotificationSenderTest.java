@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -53,8 +52,6 @@ class TelegramReminderNotificationSenderTest {
                         .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
                         .build(),
                 "test-token",
-                3,
-                Duration.ofMillis(1),
                 new SimpleMeterRegistry()
         );
 
@@ -70,19 +67,13 @@ class TelegramReminderNotificationSenderTest {
     }
 
     @Test
-    void deliverShouldRetryTransientTelegramFailures() throws Exception {
+    void deliverShouldClassifyTransientTelegramFailureWithoutInternalRetryLoop() throws Exception {
         AtomicInteger attempts = new AtomicInteger();
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/bottest-token/sendMessage", exchange -> {
-            int attempt = attempts.incrementAndGet();
-            if (attempt < 3) {
-                writeJson(exchange, 502, """
-                        {"ok":false,"description":"bad gateway"}
-                        """);
-                return;
-            }
-            writeJson(exchange, 200, """
-                    {"ok":true,"result":{"message_id":42}}
+            attempts.incrementAndGet();
+            writeJson(exchange, 502, """
+                    {"ok":false,"description":"bad gateway"}
                     """);
         });
         server.start();
@@ -92,15 +83,13 @@ class TelegramReminderNotificationSenderTest {
                         .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
                         .build(),
                 "test-token",
-                3,
-                Duration.ofMillis(1),
                 new SimpleMeterRegistry()
         );
 
         ReminderNotificationDeliveryResult result = sender.deliver(notification());
 
-        assertTrue(result.deliveredSuccessfully());
-        assertEquals(3, attempts.get());
+        assertTrue(result.retryableFailure());
+        assertEquals(1, attempts.get());
     }
 
     @Test
@@ -120,8 +109,6 @@ class TelegramReminderNotificationSenderTest {
                         .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
                         .build(),
                 "test-token",
-                3,
-                Duration.ofMillis(1),
                 new SimpleMeterRegistry()
         );
 

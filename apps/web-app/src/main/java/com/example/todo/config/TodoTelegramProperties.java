@@ -11,8 +11,6 @@ public class TodoTelegramProperties {
     private String botToken;
     private Duration connectTimeout = Duration.ofSeconds(2);
     private Duration readTimeout = Duration.ofSeconds(5);
-    private int maxAttempts = 3;
-    private Duration retryBackoff = Duration.ofSeconds(1);
 
     public boolean isEnabled() {
         return enabled;
@@ -54,22 +52,6 @@ public class TodoTelegramProperties {
         this.readTimeout = readTimeout;
     }
 
-    public int getMaxAttempts() {
-        return maxAttempts;
-    }
-
-    public void setMaxAttempts(int maxAttempts) {
-        this.maxAttempts = maxAttempts;
-    }
-
-    public Duration getRetryBackoff() {
-        return retryBackoff;
-    }
-
-    public void setRetryBackoff(Duration retryBackoff) {
-        this.retryBackoff = retryBackoff;
-    }
-
     public String requireBotToken() {
         if (botToken == null || botToken.isBlank()) {
             throw new IllegalStateException("todo.telegram.bot-token must be set when Telegram delivery is enabled");
@@ -83,17 +65,6 @@ public class TodoTelegramProperties {
 
     public Duration requireReadTimeout() {
         return requirePositiveDuration(readTimeout, "readTimeout");
-    }
-
-    public int requireMaxAttempts() {
-        if (maxAttempts < 1) {
-            throw new IllegalStateException("todo.telegram.max-attempts must be at least 1");
-        }
-        return maxAttempts;
-    }
-
-    public Duration requireRetryBackoff() {
-        return requirePositiveDuration(retryBackoff, "retryBackoff");
     }
 
     private Duration requirePositiveDuration(Duration value, String fieldName) {
