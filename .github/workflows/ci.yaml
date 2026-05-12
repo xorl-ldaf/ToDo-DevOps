@@ -92,13 +92,51 @@ jobs:
             org.opencontainers.image.description=ToDo-DevOps application
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
-      - name: Log in to GitHub Container Registry
+      - name: Check GitHub Container Registry availability
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        if: github.event_name != 'pull_request'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Build and optionally push Docker image
         id: docker_build
@@ -147,12 +185,49 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check GitHub Container Registry availability
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Start smoke stack from published image
         env:
@@ -184,12 +259,49 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check GitHub Container Registry availability
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Install safe Trivy
         uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
@@ -262,12 +374,49 @@ jobs:
         with:
           cosign-release: 'v3.0.6'
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check GitHub Container Registry availability
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Sign published image by digest
         env:
@@ -290,12 +439,49 @@ jobs:
         with:
           cosign-release: 'v3.0.6'
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check GitHub Container Registry availability
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Verify signature from this repository workflow
         env:
@@ -323,12 +509,49 @@ jobs:
       attestations: write
 
     steps:
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check GitHub Container Registry availability
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Generate image build provenance attestation
         id: attest
@@ -353,12 +576,49 @@ jobs:
     if: github.event_name != 'pull_request'
 
     steps:
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check GitHub Container Registry availability
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Verify provenance via GitHub attestation API
         env:
@@ -416,12 +676,49 @@ jobs:
       attestations: write
 
     steps:
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check GitHub Container Registry availability
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Download SBOM artifact
         uses: actions/download-artifact@v4
@@ -453,12 +750,49 @@ jobs:
     if: github.event_name != 'pull_request'
 
     steps:
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check GitHub Container Registry availability
+        run: |
+          set +e
+          http_code="$(curl -v --connect-timeout 10 --max-time 30 -o /tmp/ghcr-v2-response -w '%{http_code}' https://ghcr.io/v2/)"
+          curl_status=$?
+          set -e
+
+          if [[ "${curl_status}" -ne 0 ]]; then
+            echo "::error::GHCR availability check failed before Docker login: curl exited with ${curl_status}. This usually indicates a timeout, DNS error, or connection error."
+            exit 1
+          fi
+
+          if [[ "${http_code}" == "401" ]]; then
+            echo "GHCR is reachable and returned HTTP 401 as expected for an unauthenticated registry request."
+          else
+            echo "::warning::GHCR /v2/ returned HTTP ${http_code}; registry was reachable, continuing to authenticated Docker login."
+          fi
+
+      - name: Log in to GitHub Container Registry with retry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set +e
+          status=1
+          for attempt in 1 2 3; do
+            echo "Docker login to ghcr.io attempt ${attempt}/3"
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            status=$?
+            if [[ "${status}" -eq 0 ]]; then
+              echo "Docker login to ghcr.io succeeded."
+              exit 0
+            fi
+
+            if [[ "${attempt}" -lt 3 ]]; then
+              sleep_seconds=$((attempt * 10))
+              echo "::warning::Docker login to ghcr.io failed with exit code ${status}; retrying in ${sleep_seconds}s."
+              sleep "${sleep_seconds}"
+            fi
+          done
+
+          echo "::error::Docker login to ghcr.io failed after 3 attempts."
+          exit "${status}"
 
       - name: Verify SBOM attestation via GitHub attestation API
         env:
