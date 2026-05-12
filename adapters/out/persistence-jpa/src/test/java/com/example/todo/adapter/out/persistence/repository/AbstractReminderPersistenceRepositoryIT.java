@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -27,6 +28,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @SpringJUnitConfig(classes = AbstractReminderPersistenceRepositoryIT.TestConfig.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers(disabledWithoutDocker = true)
 abstract class AbstractReminderPersistenceRepositoryIT {
     protected static final Instant NOW = Instant.parse("2026-05-12T10:00:00Z");
