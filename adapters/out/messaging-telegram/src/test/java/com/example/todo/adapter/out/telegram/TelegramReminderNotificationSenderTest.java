@@ -7,12 +7,12 @@ import com.sun.net.httpserver.HttpServer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -47,13 +47,7 @@ class TelegramReminderNotificationSenderTest {
         });
         server.start();
 
-        TelegramReminderNotificationSender sender = new TelegramReminderNotificationSender(
-                RestClient.builder()
-                        .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
-                        .build(),
-                "test-token",
-                new SimpleMeterRegistry()
-        );
+        TelegramReminderNotificationSender sender = sender();
 
         ReminderNotificationDeliveryResult result = sender.deliver(notification());
 
@@ -72,23 +66,18 @@ class TelegramReminderNotificationSenderTest {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/bottest-token/sendMessage", exchange -> {
             attempts.incrementAndGet();
-            writeJson(exchange, 502, """
-                    {"ok":false,"description":"bad gateway"}
+            writeJson(exchange, 500, """
+                    {"ok":false,"description":"internal server error"}
                     """);
         });
         server.start();
 
-        TelegramReminderNotificationSender sender = new TelegramReminderNotificationSender(
-                RestClient.builder()
-                        .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
-                        .build(),
-                "test-token",
-                new SimpleMeterRegistry()
-        );
+        TelegramReminderNotificationSender sender = sender();
 
         ReminderNotificationDeliveryResult result = sender.deliver(notification());
 
         assertTrue(result.retryableFailure());
+        assertEquals("telegram HTTP 500", result.reason());
         assertEquals(1, attempts.get());
     }
 
@@ -104,18 +93,81 @@ class TelegramReminderNotificationSenderTest {
         });
         server.start();
 
-        TelegramReminderNotificationSender sender = new TelegramReminderNotificationSender(
-                RestClient.builder()
-                        .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
-                        .build(),
-                "test-token",
-                new SimpleMeterRegistry()
-        );
+        TelegramReminderNotificationSender sender = sender();
 
         ReminderNotificationDeliveryResult result = sender.deliver(notification());
 
         assertTrue(result.permanentFailure());
         assertFalse(result.deliveredSuccessfully());
+        assertEquals(1, attempts.get());
+    }
+
+    @Test
+    void deliverShouldClassifyForbiddenTelegramChatAsPermanentFailure() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/bottest-token/sendMessage", exchange -> {
+            attempts.incrementAndGet();
+            writeJson(exchange, 403, """
+                    {"ok":false,"description":"Forbidden: bot was blocked by the user"}
+                    """);
+        });
+        server.start();
+
+        ReminderNotificationDeliveryResult result = sender().deliver(notification());
+
+        assertTrue(result.permanentFailure());
+        assertEquals("telegram chat forbidden HTTP 403", result.reason());
+        assertEquals(1, attempts.get());
+    }
+
+    @Test
+    void deliverShouldClassifyTooManyRequestsAsRetryableFailure() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/bottest-token/sendMessage", exchange -> {
+            attempts.incrementAndGet();
+            writeJson(exchange, 429, """
+                    {"ok":false,"description":"Too Many Requests"}
+                    """);
+        });
+        server.start();
+
+        ReminderNotificationDeliveryResult result = sender().deliver(notification());
+
+        assertTrue(result.retryableFailure());
+        assertEquals("telegram HTTP 429", result.reason());
+        assertEquals(1, attempts.get());
+    }
+
+    @Test
+    void deliverShouldClassifyReadTimeoutAsRetryableFailure() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/bottest-token/sendMessage", exchange -> {
+            attempts.incrementAndGet();
+            try {
+                Thread.sleep(500);
+                writeJson(exchange, 200, """
+                        {"ok":true}
+                        """);
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        server.start();
+
+        TelegramReminderNotificationSender sender = new TelegramReminderNotificationSender(
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "test-token",
+                Duration.ofMillis(50),
+                Duration.ofMillis(50),
+                new SimpleMeterRegistry()
+        );
+
+        ReminderNotificationDeliveryResult result = sender.deliver(notification());
+
+        assertTrue(result.retryableFailure());
         assertEquals(1, attempts.get());
     }
 
@@ -133,6 +185,16 @@ class TelegramReminderNotificationSenderTest {
                 UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"),
                 "Alice DevOps",
                 123456789L
+        );
+    }
+
+    private TelegramReminderNotificationSender sender() {
+        return new TelegramReminderNotificationSender(
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "test-token",
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(1),
+                new SimpleMeterRegistry()
         );
     }
 

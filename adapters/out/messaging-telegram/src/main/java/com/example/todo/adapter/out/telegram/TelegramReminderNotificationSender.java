@@ -5,13 +5,14 @@ import com.example.todo.application.port.out.DeliverReminderNotificationPort;
 import com.example.todo.application.port.out.ReminderNotificationDeliveryResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
@@ -24,6 +25,20 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
     private final RestClient restClient;
     private final String botToken;
     private final MeterRegistry meterRegistry;
+
+    public TelegramReminderNotificationSender(
+            String baseUrl,
+            String botToken,
+            Duration connectTimeout,
+            Duration readTimeout,
+            MeterRegistry meterRegistry
+    ) {
+        this(
+                timeoutConfiguredRestClient(baseUrl, connectTimeout, readTimeout),
+                botToken,
+                meterRegistry
+        );
+    }
 
     public TelegramReminderNotificationSender(
             RestClient restClient,
@@ -64,9 +79,9 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
             }
             if (!response.ok()) {
                 ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.permanentFailure(
-                        "telegram API rejected message: " + response.description()
+                        "telegram API rejected message without retry: " + response.description()
                 );
-                recordAttempt(sample, "permanent_failure");
+                recordAttempt(sample, "non_retryable_failure");
                 logFailure(actualNotification, result, null);
                 return result;
             }
@@ -125,10 +140,16 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
 
     private ReminderNotificationDeliveryResult classifyHttpFailure(RestClientResponseException exception) {
         int statusCode = exception.getStatusCode().value();
-        if (statusCode == 429 || statusCode >= 500) {
+        if (statusCode == 408 || statusCode == 429 || statusCode >= 500) {
             return ReminderNotificationDeliveryResult.retryableFailure("telegram HTTP " + statusCode);
         }
-        return ReminderNotificationDeliveryResult.permanentFailure("telegram HTTP " + statusCode);
+        if (statusCode == 400) {
+            return ReminderNotificationDeliveryResult.permanentFailure("telegram invalid request HTTP 400");
+        }
+        if (statusCode == 403) {
+            return ReminderNotificationDeliveryResult.permanentFailure("telegram chat forbidden HTTP 403");
+        }
+        return ReminderNotificationDeliveryResult.permanentFailure("telegram non-retryable HTTP " + statusCode);
     }
 
     private void logFailure(
@@ -138,7 +159,7 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
     ) {
         if (result.permanentFailure()) {
             log.warn(
-                    "Telegram delivery failed permanently reminderId={} reason={}",
+                    "Telegram delivery failed without retry reminderId={} reason={}",
                     notification.reminderId(),
                     result.reason(),
                     exception
@@ -172,11 +193,37 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
             return "delivered";
         }
         if (result.permanentFailure()) {
-            return "permanent_failure";
+            return "non_retryable_failure";
         }
         if (result.retryableFailure()) {
             return "retryable_failure";
         }
         return "skipped";
+    }
+
+    private static RestClient timeoutConfiguredRestClient(
+            String baseUrl,
+            Duration connectTimeout,
+            Duration readTimeout
+    ) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(timeoutMillis(connectTimeout, "connectTimeout"));
+        requestFactory.setReadTimeout(timeoutMillis(readTimeout, "readTimeout"));
+        return RestClient.builder()
+                .baseUrl(requireText(baseUrl, "baseUrl"))
+                .requestFactory(requestFactory)
+                .build();
+    }
+
+    private static int timeoutMillis(Duration value, String fieldName) {
+        Duration actualValue = Objects.requireNonNull(value, fieldName + " must not be null");
+        if (actualValue.isNegative() || actualValue.isZero()) {
+            throw new IllegalArgumentException(fieldName + " must be positive");
+        }
+        long millis = actualValue.toMillis();
+        if (millis < 1 || millis > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(fieldName + " must be between 1ms and " + Integer.MAX_VALUE + "ms");
+        }
+        return (int) millis;
     }
 }

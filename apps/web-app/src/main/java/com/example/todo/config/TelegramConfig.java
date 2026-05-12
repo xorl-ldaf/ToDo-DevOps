@@ -8,7 +8,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 @Configuration
 @EnableConfigurationProperties(TodoTelegramProperties.class)
@@ -20,16 +19,11 @@ public class TelegramConfig {
             TodoTelegramProperties properties,
             MeterRegistry meterRegistry
     ) {
-        String botToken = properties.requireBotToken();
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout((int) properties.requireConnectTimeout().toMillis());
-        requestFactory.setReadTimeout((int) properties.requireReadTimeout().toMillis());
         return new TelegramReminderNotificationSender(
-                org.springframework.web.client.RestClient.builder()
-                        .baseUrl(properties.getBaseUrl())
-                        .requestFactory(requestFactory)
-                        .build(),
-                botToken,
+                properties.getBaseUrl(),
+                properties.requireBotToken(),
+                properties.requireConnectTimeout(),
+                properties.requireReadTimeout(),
                 meterRegistry
         );
     }

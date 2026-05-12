@@ -69,6 +69,7 @@ alter table reminders
 
 drop index if exists idx_reminders_status_remind_at;
 create index if not exists idx_reminders_status_next_attempt_at on reminders(status, next_attempt_at);
+create index if not exists idx_reminders_processing_started_at on reminders(processing_started_at);
 
 alter table reminders
     drop column if exists sent_at;

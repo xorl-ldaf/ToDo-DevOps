@@ -96,6 +96,19 @@ class CreateTaskServiceTest {
     }
 
     @Test
+    void createTaskShouldValidateTitleBeforeCallingPorts() {
+        UserId authorId = userId("11111111-1111-1111-1111-111111111111");
+
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.createTask(new CreateTaskCommand(" ", "desc", authorId, null, null, null))
+        );
+
+        assertEquals("title must not be blank", exception.getMessage());
+        verifyNoInteractions(loadUserPort, saveTaskPort);
+    }
+
+    @Test
     void createTaskShouldRejectMissingAuthor() {
         UserId authorId = userId("11111111-1111-1111-1111-111111111111");
         when(loadUserPort.existsById(authorId)).thenReturn(false);

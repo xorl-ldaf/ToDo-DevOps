@@ -337,6 +337,7 @@ jobs:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ needs.docker-image.outputs.image_digest }}
           push-to-registry: true
+          create-storage-record: false
 
       - name: Print attestation URL
         run: |
@@ -436,6 +437,7 @@ jobs:
           subject-digest: ${{ needs.docker-image.outputs.image_digest }}
           sbom-path: sbom/trivy-image-sbom.cdx.json
           push-to-registry: true
+          create-storage-record: false
 
       - name: Print SBOM attestation URL
         run: |

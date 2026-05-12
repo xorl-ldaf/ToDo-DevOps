@@ -21,7 +21,8 @@ import java.util.UUID;
         name = "reminders",
         indexes = {
                 @Index(name = "idx_reminders_task_id", columnList = "task_id"),
-                @Index(name = "idx_reminders_status_next_attempt_at", columnList = "status, next_attempt_at")
+                @Index(name = "idx_reminders_status_next_attempt_at", columnList = "status, next_attempt_at"),
+                @Index(name = "idx_reminders_processing_started_at", columnList = "processing_started_at")
         }
 )
 public class ReminderJpaEntity {

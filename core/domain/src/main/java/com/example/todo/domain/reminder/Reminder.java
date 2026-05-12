@@ -143,7 +143,7 @@ public class Reminder {
         return status == ReminderStatus.SCHEDULED && !nextAttemptAt.isAfter(actualMoment);
     }
 
-    public void markProcessing(String owner, Instant now) {
+    public void markProcessing(String processorId, Instant now) {
         if (this.status != ReminderStatus.SCHEDULED && this.status != ReminderStatus.PROCESSING) {
             throw new InvalidStateTransitionException(
                     "reminder cannot be claimed for processing from status: " + this.status
@@ -152,7 +152,7 @@ public class Reminder {
 
         Instant actualNow = requireValidUpdateTime(now);
         this.status = ReminderStatus.PROCESSING;
-        this.processingOwner = requireText(owner, "owner");
+        this.processingOwner = requireText(processorId, "processorId");
         this.processingStartedAt = actualNow;
         this.updatedAt = actualNow;
         this.lastFailureReason = null;
@@ -218,6 +218,9 @@ public class Reminder {
         if (actualNow.isBefore(createdAt)) {
             throw new DomainValidationException("updatedAt must not be before createdAt");
         }
+        if (actualNow.isBefore(updatedAt)) {
+            throw new DomainValidationException("updatedAt must not move backwards");
+        }
         return actualNow;
     }
 
@@ -225,6 +228,9 @@ public class Reminder {
         Instant actualNow = requireNonNull(now, "now");
         if (actualNow.isBefore(createdAt)) {
             throw new DomainValidationException("deliveredAt must not be before createdAt");
+        }
+        if (actualNow.isBefore(updatedAt)) {
+            throw new DomainValidationException("updatedAt must not move backwards");
         }
         return actualNow;
     }

@@ -8,6 +8,7 @@ import com.example.todo.application.port.out.LoadTaskRemindersPort;
 import com.example.todo.application.port.out.SaveReminderPort;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderId;
+import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.task.TaskId;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -89,7 +90,7 @@ public class ReminderPersistenceAdapter implements
     private boolean withClaimedReminder(ReminderId reminderId, String processorId, Consumer<Reminder> action) {
         return repository.findForUpdateByIdAndStatusAndProcessingOwner(
                         reminderId.value(),
-                        "PROCESSING",
+                        ReminderStatus.PROCESSING,
                         processorId
                 )
                 .map(ReminderPersistenceMapper::toDomain)

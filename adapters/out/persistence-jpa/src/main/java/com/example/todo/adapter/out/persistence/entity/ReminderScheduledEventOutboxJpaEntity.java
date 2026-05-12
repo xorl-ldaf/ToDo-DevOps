@@ -34,6 +34,12 @@ public class ReminderScheduledEventOutboxJpaEntity {
     @Column(name = "task_id", nullable = false)
     private UUID taskId;
 
+    @Column(name = "event_type", nullable = false, length = 128)
+    private String eventType;
+
+    @Column(name = "event_version", nullable = false, length = 32)
+    private String eventVersion;
+
     @Column(name = "payload", nullable = false, columnDefinition = "text")
     private String payload;
 

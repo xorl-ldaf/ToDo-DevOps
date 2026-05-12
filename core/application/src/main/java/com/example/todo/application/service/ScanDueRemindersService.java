@@ -62,7 +62,7 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
     }
 
     @Override
-    public ReminderProcessingReport scanAndPublishDueReminders(Instant now) {
+    public ReminderProcessingReport processDueReminders(Instant now) {
         Objects.requireNonNull(now, "now must not be null");
 
         List<Reminder> reminders = claimDueRemindersPort.claimDueReminders(now, processorId, processingTimeout, batchSize);

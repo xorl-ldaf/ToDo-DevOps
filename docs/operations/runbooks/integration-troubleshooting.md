@@ -93,7 +93,7 @@ limit 20;
 
 - `todo.reminder.delivery.scans{outcome="failure"}`
 - `todo.reminder.delivery.results{outcome="retried"|"failed"|"conflict"}`
-- `todo.reminder.delivery.attempts{outcome="retryable_failure"|"permanent_failure"}`
+- `todo.reminder.delivery.attempts{outcome="retryable_failure"|"non_retryable_failure"}`
 
 ## When neither integration behaves as expected
 

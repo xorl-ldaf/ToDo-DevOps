@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = {WebApplication.class, TaskApiIntegrationTest.TestClockConfig.class})
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 class TaskApiIntegrationTest {
 
@@ -188,7 +188,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("task not found: " + missingTaskId)))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -210,7 +210,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.validationErrors.title", notNullValue()));
+                .andExpect(jsonPath("$.fieldErrors.title", notNullValue()));
     }
 
     @Test
@@ -228,7 +228,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.validationErrors.authorId", notNullValue()));
+                .andExpect(jsonPath("$.fieldErrors.authorId", notNullValue()));
     }
 
     @Test
@@ -250,7 +250,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("author not found: " + missingAuthorId)))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -273,7 +273,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("assignee not found: " + missingAssigneeId)))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -289,7 +289,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("task not found: " + missingTaskId)))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -313,7 +313,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("assignee not found: " + missingAssigneeId)))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -340,7 +340,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.validationErrors.assigneeId", notNullValue()));
+                .andExpect(jsonPath("$.fieldErrors.assigneeId", notNullValue()));
     }
 
     private String createUser(String username, String displayName, Long telegramChatId) throws Exception {

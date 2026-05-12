@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @SpringBootTest(classes = {WebApplication.class, ReminderKafkaIntegrationTest.TestClockConfig.class})
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 class ReminderKafkaIntegrationTest {
 

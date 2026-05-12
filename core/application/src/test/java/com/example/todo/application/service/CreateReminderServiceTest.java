@@ -9,7 +9,6 @@ import com.example.todo.application.port.out.SaveReminderPort;
 import com.example.todo.application.port.out.StoreReminderScheduledEventPort;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderStatus;
-import com.example.todo.domain.shared.exception.DomainValidationException;
 import com.example.todo.domain.task.Task;
 import com.example.todo.domain.task.TaskId;
 import com.example.todo.domain.task.TaskPriority;
@@ -103,7 +102,7 @@ class CreateReminderServiceTest {
         assertEquals(createdReminder.getId().value(), storedEvent.reminderId());
         assertEquals(taskId.value(), storedEvent.taskId());
         assertEquals(remindAt, storedEvent.remindAt());
-        assertEquals(ReminderStatus.SCHEDULED.name(), storedEvent.status());
+        assertEquals(ReminderStatus.SCHEDULED.name(), storedEvent.reminderStatus());
     }
 
     @Test
@@ -145,19 +144,16 @@ class CreateReminderServiceTest {
     }
 
     @Test
-    void createReminderShouldPropagateDomainValidationFailuresWithoutSaving() {
+    void createReminderShouldRejectPastRemindAtBeforeCallingPorts() {
         TaskId taskId = taskId("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        when(loadTaskPort.loadById(taskId)).thenReturn(Optional.of(task(taskId)));
 
-        DomainValidationException exception = assertThrows(
-                DomainValidationException.class,
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
                 () -> service.createReminder(new CreateReminderCommand(taskId, NOW.minusSeconds(1)))
         );
 
         assertEquals("remindAt must not be in the past", exception.getMessage());
-        verify(loadTaskPort).loadById(taskId);
-        verifyNoMoreInteractions(loadTaskPort);
-        verifyNoInteractions(saveReminderPort, storeReminderScheduledEventPort);
+        verifyNoInteractions(loadTaskPort, saveReminderPort, storeReminderScheduledEventPort);
     }
 
     private Task task(TaskId taskId) {

@@ -24,6 +24,9 @@ public class ReminderScheduledEventReceiptPersistenceAdapter implements SaveRemi
         ReminderScheduledEventReceipt actualReceipt = Objects.requireNonNull(receipt, "receipt must not be null");
 
         try {
+            if (repository.existsById(actualReceipt.eventId())) {
+                return false;
+            }
             ReminderScheduledEventReceiptJpaEntity entity = new ReminderScheduledEventReceiptJpaEntity();
             entity.setEventId(actualReceipt.eventId());
             entity.setReminderId(actualReceipt.reminderId());

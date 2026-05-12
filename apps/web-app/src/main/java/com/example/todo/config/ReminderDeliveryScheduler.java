@@ -36,7 +36,7 @@ public final class ReminderDeliveryScheduler {
     )
     public void deliverDueReminders() {
         try {
-            ReminderProcessingReport report = scanDueRemindersUseCase.scanAndPublishDueReminders(clock.instant());
+            ReminderProcessingReport report = scanDueRemindersUseCase.processDueReminders(clock.instant());
             meterRegistry.counter("todo.reminder.delivery.scans", "outcome", "success").increment();
             meterRegistry.counter("todo.reminder.delivery.claimed").increment(report.claimedCount());
             meterRegistry.counter("todo.reminder.delivery.results", "outcome", "delivered").increment(report.deliveredCount());

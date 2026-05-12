@@ -12,7 +12,7 @@ public record ReminderScheduledEventV1(
         UUID reminderId,
         UUID taskId,
         Instant remindAt,
-        String status
+        String reminderStatus
 ) {
     public static final String EVENT_TYPE = "reminder.scheduled";
     public static final String EVENT_VERSION = "v1";
@@ -25,7 +25,11 @@ public record ReminderScheduledEventV1(
         reminderId = Objects.requireNonNull(reminderId, "reminderId must not be null");
         taskId = Objects.requireNonNull(taskId, "taskId must not be null");
         remindAt = Objects.requireNonNull(remindAt, "remindAt must not be null");
-        status = Objects.requireNonNull(status, "status must not be null");
+        reminderStatus = Objects.requireNonNull(reminderStatus, "reminderStatus must not be null");
+    }
+
+    public String status() {
+        return reminderStatus;
     }
 
     private static String requireEquals(String expected, String actual, String fieldName) {

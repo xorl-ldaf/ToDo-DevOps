@@ -1,5 +1,6 @@
 package com.example.todo.application.service;
 
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.ListTaskRemindersUseCase;
 import com.example.todo.application.port.out.LoadTaskPort;
@@ -24,7 +25,9 @@ public class ListTaskRemindersService implements ListTaskRemindersUseCase {
 
     @Override
     public List<Reminder> listTaskReminders(TaskId taskId) {
-        Objects.requireNonNull(taskId, "taskId must not be null");
+        if (taskId == null) {
+            throw new ApplicationValidationException("taskId must not be null");
+        }
 
         if (loadTaskPort.loadById(taskId).isEmpty()) {
             throw new ResourceNotFoundException("task not found: " + taskId.value());

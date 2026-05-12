@@ -1,38 +1,27 @@
-# Architecture Overview
+# Architecture
 
-## Why this shape
+This repository uses hexagonal architecture for a practical reason: the interesting parts of the project are the use-case contracts and reliability trade-offs, not Spring annotations. Domain and application code stay isolated from REST, JPA, Kafka, Telegram, and deployment wiring so those adapters can change without rewriting business logic.
 
-The repository is intentionally built as onion/hexagonal architecture instead of a single Spring Boot module with controllers, repositories, Kafka code, and HTTP clients mixed together.
-
-The reasons are practical, not stylistic:
-
-- reminder state transitions live in `core/domain`;
-- consistency and use-case contracts live in `core/application`;
-- Spring/JPA/Kafka/Telegram details stay in adapters or `apps/web-app`;
-- runtime wiring can change without dragging infrastructure concerns into domain code.
-
-## Module map
-
-The actual Gradle module structure is:
+## Module Map
 
 - `core/domain`
-  Domain model: users, tasks, reminders, identifiers, state transitions, and domain exceptions.
+  Users, tasks, reminders, value objects, lifecycle states, and domain validation.
 - `core/application`
-  Use cases, commands, ports, integration contracts, outbox/receipt models, and application services.
+  Use cases, commands, ports, services, reminder event contracts, outbox message model, and Kafka receipt model.
 - `adapters/in/web-rest`
   REST controllers, DTOs, validation, API mapping, and exception handling.
 - `adapters/in/messaging-kafka`
   Kafka consumer for `ReminderScheduledEventV1`.
 - `adapters/out/persistence-jpa`
-  JPA entities, Spring Data repositories, migrations mapping support, and persistence adapters.
+  JPA entities, Spring Data repositories, and persistence adapters for PostgreSQL.
 - `adapters/out/messaging-kafka`
-  Kafka publisher for reminder-scheduled integration events.
+  Kafka publisher implementation for reminder-scheduled events.
 - `adapters/out/messaging-telegram`
-  Telegram HTTP client adapter for reminder notification delivery.
+  Telegram HTTP adapter for reminder notification delivery.
 - `apps/web-app`
-  Spring Boot bootstrapping, bean wiring, schedulers, runtime configuration, and profile-specific config.
+  Spring Boot entrypoint, bean wiring, schedulers, runtime properties, profiles, and Flyway migrations.
 
-## Layer boundaries
+## Dependency Direction
 
 ```text
 domain
@@ -44,36 +33,45 @@ application services + ports
 inbound adapters   outbound adapters
   ^
   |
-Spring Boot app wiring / runtime config
+Spring Boot runtime wiring
 ```
 
-Practical interpretation in this repository:
+The main rules:
 
-- `domain` does not know about Spring, HTTP, Kafka, JPA, or Telegram.
-- `application` depends on ports such as `SaveReminderPort`, `StoreReminderScheduledEventPort`, `ClaimDueRemindersPort`, `FinalizeReminderDeliveryPort`, and `PublishReminderScheduledEventPort`.
-- adapters implement those ports and translate to framework/infrastructure specifics.
-- `apps/web-app` composes everything together through Spring configuration.
+- `core/domain` does not depend on Spring, JPA, Kafka, HTTP, or Telegram.
+- `core/application` depends on ports such as `SaveReminderPort`, `ClaimDueRemindersPort`, `FinalizeReminderDeliveryPort`, `StoreReminderScheduledEventPort`, and `PublishReminderScheduledEventPort`.
+- inbound adapters call application use cases.
+- outbound adapters implement application ports.
+- `apps/web-app` wires concrete adapters into the application.
 
-## Reminder model
+This keeps the codebase testable at multiple levels: domain tests, application service tests with fake ports, adapter tests, and Spring integration tests.
 
-### Reminder states
+## REST API Surface
 
-The reminder lifecycle is now explicit and semantically aligned with actual runtime behavior:
+The implemented HTTP API is intentionally small:
 
-- `SCHEDULED`
-  Reminder is waiting for `nextAttemptAt`.
-- `PROCESSING`
-  Reminder is claimed by a worker lease and external delivery is in progress.
-- `DELIVERED`
-  Telegram accepted the reminder notification.
-- `FAILED`
-  Reminder reached a terminal failure condition.
+- `POST /api/users`
+- `GET /api/users`
+- `GET /api/users/{userId}`
+- `POST /api/tasks`
+- `GET /api/tasks`
+- `GET /api/tasks/{taskId}`
+- `PATCH /api/tasks/{taskId}/assign`
+- `POST /api/tasks/{taskId}/reminders`
+- `GET /api/tasks/{taskId}/reminders`
 
-There is no longer a misleading split between `PUBLISHED` and `SENT`.
+There is no authentication/authorization layer in the current API.
 
-### Reminder fields that matter operationally
+## Reminder Model
 
-The reminder aggregate now carries the state required for reliable background processing:
+Reminder lifecycle states:
+
+- `SCHEDULED` - reminder is waiting for `nextAttemptAt`.
+- `PROCESSING` - a worker has claimed the reminder.
+- `DELIVERED` - Telegram accepted the notification.
+- `FAILED` - processing reached a terminal failure.
+
+Operational fields stored in PostgreSQL:
 
 - `nextAttemptAt`
 - `processingStartedAt`
@@ -82,97 +80,89 @@ The reminder aggregate now carries the state required for reliable background pr
 - `deliveredAt`
 - `lastFailureReason`
 
-These fields exist because the delivery path is a real background workflow, not a fire-and-forget loop.
+These fields make the worker recoverable after crashes and allow concurrent app instances to share work through database locking.
 
-## Main runtime flows
+## Reminder Creation Boundary
 
-### REST CRUD flow
+`CreateReminderService` validates that the task exists and creates a `SCHEDULED` reminder. In `apps/web-app`, this use case is wrapped by `TransactionalCreateReminderUseCase`.
 
-1. `adapters/in/web-rest` receives HTTP requests under `/api/users`, `/api/tasks`, and `/api/tasks/{taskId}/reminders`.
-2. DTOs are mapped into application commands.
-3. Application services execute use cases.
-4. Persistence adapters translate domain objects to JPA entities and store them in PostgreSQL.
+When Kafka is disabled:
 
-### Reminder creation flow
+1. the reminder row is saved;
+2. the outbox port is a no-op;
+3. the transaction commits.
 
-1. `CreateReminderService` validates the task and creates a `SCHEDULED` reminder.
-2. The reminder is saved through the reminder persistence port.
-3. If Kafka integration is enabled, the matching `ReminderScheduledEventV1` is stored in the outbox through `StoreReminderScheduledEventPort`.
-4. The REST request returns success only after both writes commit in one transaction.
+When Kafka is enabled:
 
-Resulting contract:
+1. the reminder row is saved;
+2. a `ReminderScheduledEventV1` row is stored in `reminder_scheduled_event_outbox`;
+3. both writes commit in the same PostgreSQL transaction.
 
-- reminder row is durable;
-- if Kafka integration is enabled, the event is also durable in the outbox;
-- synchronous Kafka publication is not part of the request contract.
+Kafka publication is not part of the REST transaction. The API guarantees durable intent to publish, not synchronous publication.
 
-### Kafka outbox flow
+## Kafka Integration Boundary
 
-1. `ReminderScheduledEventOutboxScheduler` claims pending outbox rows in short transactions.
-2. The worker publishes to Kafka outside the transaction.
-3. The outbox row is finalized as `PUBLISHED`, rescheduled for retry, or marked `FAILED`.
+Kafka is used as an integration boundary for "a reminder was scheduled". It is deliberately not the reminder delivery execution path.
 
-This is a baseline outbox pattern, not an exactly-once cross-system guarantee.
+Outbound flow:
 
-### Kafka consumer / receipt flow
+1. reminder creation stores an outbox row when Kafka is enabled;
+2. `ReminderScheduledEventOutboxScheduler` claims pending outbox rows;
+3. `KafkaReminderScheduledEventPublisher` publishes to Kafka;
+4. the outbox row is marked `PUBLISHED`, rescheduled, or marked `FAILED`.
 
-1. `adapters/in/messaging-kafka` consumes `ReminderScheduledEventV1`.
-2. The consumer records an idempotent receipt row keyed by `eventId`.
-3. Metrics/logs expose consume throughput, lag, failures, retries, and duplicate receipts.
+Inbound flow:
 
-This gives Kafka a real operational role:
+1. `KafkaReminderScheduledEventConsumer` consumes `ReminderScheduledEventV1`;
+2. the consumer writes a receipt row keyed by `eventId`;
+3. duplicate deliveries are counted and ignored by the receipt persistence path.
 
-- durable outbound integration boundary
-- downstream consumer behavior
-- receipt/audit trail for reconciliation
+This gives the project a real Kafka path for integration, audit, lag metrics, and duplicate handling. It does not create exactly-once behavior across PostgreSQL and Kafka.
 
-### Reminder delivery flow
+## Reminder Worker Transaction Boundaries
 
-1. `ReminderDeliveryScheduler` invokes `ScanDueRemindersUseCase`.
-2. Persistence claims due reminders using `FOR UPDATE SKIP LOCKED` and short claim transactions.
-3. The worker resolves task/assignee data.
-4. Telegram delivery happens outside the database transaction.
-5. Finalization happens in a new short transaction:
-   - `DELIVERED` on success
-   - `SCHEDULED` with a later `nextAttemptAt` on retryable failure
-   - `FAILED` on terminal failure
+The reminder delivery worker avoids long transactions around external HTTP:
 
-Important properties of the new design:
+1. Claim due reminders in a short transaction using `FOR UPDATE SKIP LOCKED`.
+2. Load task and assignee data.
+3. Call Telegram outside the claim transaction.
+4. Finalize in a new short transaction by checking the claimed reminder and `processingOwner`.
 
-- no external HTTP inside the claim transaction
-- no `Thread.sleep` in the transaction path
-- lease-based claim/reclaim behavior for stuck workers
-- explicit retry budget and backoff policy
+Finalization outcomes:
 
-## Kafka role in this project
+- `DELIVERED` when Telegram accepts the message.
+- `SCHEDULED` with a later `nextAttemptAt` when the failure is retryable and attempts remain.
+- `FAILED` when the task/assignee is missing, the user has no Telegram chat ID, Telegram rejects permanently, or retry budget is exhausted.
 
-Kafka is intentionally not the same thing as reminder execution.
+If a process dies while a reminder is `PROCESSING`, a later scan can reclaim it after `processingTimeout`.
 
-Kafka exists here to model a durable integration boundary for “reminder was scheduled”, while Telegram delivery remains a separate background concern. That is why:
+## Consistency and Failure Semantics
 
-- creating a reminder goes through the outbox;
-- Kafka consumer receipts are stored for audit/reconciliation;
-- the reminder delivery worker does not depend on Kafka consumption.
+- Reminder creation is durable in PostgreSQL after the request succeeds.
+- With Kafka enabled, the outbox row is committed in the same transaction as the reminder row.
+- Kafka publication is asynchronous and at-least-once.
+- Duplicate Kafka publication or consumption can happen.
+- Kafka receipt persistence is idempotent by `eventId` and also tracks topic/partition/offset.
+- Telegram delivery is at-least-once because Telegram `sendMessage` does not give this code path an idempotency key.
+- A crash after Telegram accepts a message but before `markDelivered` commits can lead to a duplicate Telegram message.
 
-## Why the DevOps pieces are part of the architecture
+## DevOps Shape
 
-This project is not only a Java CRUD sample. The operational assets are part of the system shape:
+The operational files are part of the architecture rather than disconnected examples:
 
-- `compose.yaml` gives a local environment with Postgres, Kafka, Prometheus, and Grafana.
-- `Dockerfile` produces the hardened runtime image.
-- `.github/workflows/ci.yaml` builds, tests, scans, signs, and attests the image.
-- `.github/workflows/deploy.yaml` promotes an immutable digest into Kubernetes.
-- `deploy/k8s/` contains the workload deployment baseline.
+- `compose.yaml` runs the local app stack with PostgreSQL, Kafka, Prometheus, and Grafana.
+- `Dockerfile` builds the Spring Boot app and runs it as a non-root user.
+- `.github/workflows/ci.yaml` validates Compose, builds/tests, builds and smoke-tests the image, scans it, signs it, and creates/verifies attestations.
+- `.github/workflows/deploy.yaml` deploys a previously published immutable image digest.
+- `deploy/k8s/` contains Kustomize base and local/prod overlays for the app workload.
 - `observability/` contains Prometheus and Grafana provisioning.
 
-## Current boundaries
+## Out of Scope
 
-Several things are deliberately still out of scope:
-
-- no in-cluster deployment of PostgreSQL, Kafka, Prometheus, or Grafana
-- no distributed tracing
-- no centralized logging stack
-- no NetworkPolicy or secret-manager integration
-- no end-to-end exactly-once delivery across PostgreSQL, Kafka, and Telegram
-
-The important part is that those limits are explicit in the code and docs instead of being masked by misleading semantics.
+- full production security model
+- authentication and authorization
+- distributed tracing
+- centralized log aggregation
+- in-cluster PostgreSQL/Kafka/Prometheus/Grafana provisioning
+- secret-manager integration
+- exactly-once delivery across PostgreSQL, Kafka, and Telegram

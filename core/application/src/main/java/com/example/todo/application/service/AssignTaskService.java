@@ -32,7 +32,9 @@ public class AssignTaskService implements AssignTaskUseCase {
 
     @Override
     public Task assignTask(AssignTaskCommand command) {
-        Objects.requireNonNull(command, "command must not be null");
+        if (command == null) {
+            throw new ApplicationValidationException("command must not be null");
+        }
 
         if (command.taskId() == null) {
             throw new ApplicationValidationException("taskId must not be null");

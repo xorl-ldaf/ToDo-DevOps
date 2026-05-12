@@ -28,7 +28,9 @@ public class CreateUserService implements CreateUserUseCase {
 
     @Override
     public User createUser(CreateUserCommand command) {
-        Objects.requireNonNull(command, "command must not be null");
+        if (command == null) {
+            throw new ApplicationValidationException("command must not be null");
+        }
 
         String username = requireText(command.username(), "username");
         requireText(command.displayName(), "displayName");

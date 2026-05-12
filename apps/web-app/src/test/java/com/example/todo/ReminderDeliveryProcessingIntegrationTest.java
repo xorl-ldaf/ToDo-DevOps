@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @SpringBootTest(classes = {WebApplication.class, ReminderDeliveryProcessingIntegrationTest.TestConfig.class})
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 class ReminderDeliveryProcessingIntegrationTest {
 
@@ -100,7 +100,7 @@ class ReminderDeliveryProcessingIntegrationTest {
         createReminder(taskId, REMIND_AT.toString());
 
         testClock.setInstant(REMIND_AT);
-        ReminderProcessingReport report = scanDueRemindersUseCase.scanAndPublishDueReminders(REMIND_AT);
+        ReminderProcessingReport report = scanDueRemindersUseCase.processDueReminders(REMIND_AT);
 
         assertEquals(1, report.deliveredCount());
         assertFalse(notificationSender.wasTransactionActiveDuringCall());
@@ -118,10 +118,10 @@ class ReminderDeliveryProcessingIntegrationTest {
 
         try (ExecutorService executorService = Executors.newFixedThreadPool(2)) {
             Future<ReminderProcessingReport> first = executorService.submit(
-                    () -> scanDueRemindersUseCase.scanAndPublishDueReminders(REMIND_AT.plusSeconds(1))
+                    () -> scanDueRemindersUseCase.processDueReminders(REMIND_AT.plusSeconds(1))
             );
             Future<ReminderProcessingReport> second = executorService.submit(
-                    () -> scanDueRemindersUseCase.scanAndPublishDueReminders(REMIND_AT.plusSeconds(1))
+                    () -> scanDueRemindersUseCase.processDueReminders(REMIND_AT.plusSeconds(1))
             );
 
             assertTrue(notificationSender.awaitStarted(5, TimeUnit.SECONDS));

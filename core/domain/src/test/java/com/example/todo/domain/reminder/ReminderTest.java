@@ -48,6 +48,40 @@ class ReminderTest {
     }
 
     @Test
+    void scheduleShouldRejectNullTaskId() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.schedule(null, now.plusSeconds(60), now)
+        );
+
+        assertEquals("taskId must not be null", exception.getMessage());
+    }
+
+    @Test
+    void scheduleShouldRejectNullReminderTime() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.schedule(TaskId.newId(), null, now)
+        );
+
+        assertEquals("remindAt must not be null", exception.getMessage());
+    }
+
+    @Test
+    void scheduleShouldRejectNullCurrentTime() {
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.schedule(TaskId.newId(), Instant.parse("2026-04-19T10:00:00Z"), null)
+        );
+
+        assertEquals("now must not be null", exception.getMessage());
+    }
+
+    @Test
     void restoreShouldRejectInvalidProcessingState() {
         Instant createdAt = Instant.parse("2026-04-19T10:00:00Z");
 
@@ -98,6 +132,81 @@ class ReminderTest {
     }
 
     @Test
+    void restoreShouldRejectDeliveredAtOutsideDeliveredStatus() {
+        Instant createdAt = Instant.parse("2026-04-19T10:00:00Z");
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.restore(
+                        ReminderId.newId(),
+                        TaskId.newId(),
+                        createdAt.plusSeconds(300),
+                        ReminderStatus.SCHEDULED,
+                        createdAt,
+                        createdAt,
+                        createdAt.plusSeconds(300),
+                        null,
+                        null,
+                        createdAt.plusSeconds(60),
+                        0,
+                        null
+                )
+        );
+
+        assertEquals("deliveredAt must be null outside DELIVERED status", exception.getMessage());
+    }
+
+    @Test
+    void restoreShouldRejectProcessingFieldsOutsideProcessingStatus() {
+        Instant createdAt = Instant.parse("2026-04-19T10:00:00Z");
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.restore(
+                        ReminderId.newId(),
+                        TaskId.newId(),
+                        createdAt.plusSeconds(300),
+                        ReminderStatus.SCHEDULED,
+                        createdAt,
+                        createdAt,
+                        createdAt.plusSeconds(300),
+                        createdAt.plusSeconds(1),
+                        "worker-a",
+                        null,
+                        0,
+                        null
+                )
+        );
+
+        assertEquals("processingStartedAt must be null outside PROCESSING status", exception.getMessage());
+    }
+
+    @Test
+    void restoreShouldRejectScheduledReminderWithoutNextAttemptAt() {
+        Instant createdAt = Instant.parse("2026-04-19T10:00:00Z");
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> Reminder.restore(
+                        ReminderId.newId(),
+                        TaskId.newId(),
+                        createdAt.plusSeconds(300),
+                        ReminderStatus.SCHEDULED,
+                        createdAt,
+                        createdAt,
+                        null,
+                        null,
+                        null,
+                        null,
+                        0,
+                        null
+                )
+        );
+
+        assertEquals("nextAttemptAt must not be null", exception.getMessage());
+    }
+
+    @Test
     void isDueAtShouldUseNextAttemptAtForScheduledReminder() {
         Instant now = Instant.parse("2026-04-19T10:00:00Z");
         Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(60), now);
@@ -118,6 +227,32 @@ class ReminderTest {
         assertEquals(claimedAt, reminder.getProcessingStartedAt());
         assertEquals("worker-a", reminder.getProcessingOwner());
         assertEquals(claimedAt, reminder.getUpdatedAt());
+    }
+
+    @Test
+    void markProcessingShouldRejectBlankProcessorId() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+        Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(60), now);
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> reminder.markProcessing(" ", now.plusSeconds(60))
+        );
+
+        assertEquals("processorId must not be blank", exception.getMessage());
+    }
+
+    @Test
+    void markProcessingShouldRejectNullProcessorId() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+        Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(60), now);
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> reminder.markProcessing(null, now.plusSeconds(60))
+        );
+
+        assertEquals("processorId must not be null", exception.getMessage());
     }
 
     @Test
@@ -154,6 +289,21 @@ class ReminderTest {
     }
 
     @Test
+    void rescheduleShouldRejectNullNextAttemptAt() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+        Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(60), now);
+
+        reminder.markProcessing("worker-a", now.plusSeconds(60));
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> reminder.reschedule(now.plusSeconds(61), null, "telegram timeout")
+        );
+
+        assertEquals("nextAttemptAt must not be null", exception.getMessage());
+    }
+
+    @Test
     void markFailedShouldMoveReminderToFailed() {
         Instant now = Instant.parse("2026-04-19T10:00:00Z");
         Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(60), now);
@@ -183,5 +333,20 @@ class ReminderTest {
                 "reminder cannot be marked as delivered from status: SCHEDULED",
                 exception.getMessage()
         );
+    }
+
+    @Test
+    void transitionShouldRejectTimestampsMovingBackwards() {
+        Instant now = Instant.parse("2026-04-19T10:00:00Z");
+        Reminder reminder = Reminder.schedule(TaskId.newId(), now.plusSeconds(60), now);
+
+        reminder.markProcessing("worker-a", now.plusSeconds(60));
+
+        DomainValidationException exception = assertThrows(
+                DomainValidationException.class,
+                () -> reminder.markFailed(now.plusSeconds(59), "telegram timeout")
+        );
+
+        assertEquals("updatedAt must not move backwards", exception.getMessage());
     }
 }

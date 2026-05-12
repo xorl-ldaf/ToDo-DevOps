@@ -72,7 +72,7 @@ Interpretation:
 - `scans{outcome=success|failure}` shows scheduler scan execution
 - `claimed` shows reminders claimed for processing
 - `results{outcome=delivered|retried|failed|conflict}` shows finalize outcomes
-- `attempts{outcome=delivered|retryable_failure|permanent_failure}` shows Telegram adapter classifications
+- `attempts{outcome=delivered|retryable_failure|non_retryable_failure}` shows Telegram adapter classifications
 - `attempt.duration` shows external Telegram call duration by outcome
 
 ### Kafka outbox
@@ -133,4 +133,4 @@ The repository does not currently include:
 - SLO/error-budget automation
 - cluster-level Prometheus/Grafana manifests
 
-This is a meaningful operational baseline for this project’s actual runtime paths, not a full platform observability stack.
+This is a meaningful operational baseline for this project's actual runtime paths, not a full platform observability stack.

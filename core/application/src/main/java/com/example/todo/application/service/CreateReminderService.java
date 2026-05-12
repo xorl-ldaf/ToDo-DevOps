@@ -11,6 +11,7 @@ import com.example.todo.application.port.out.StoreReminderScheduledEventPort;
 import com.example.todo.domain.reminder.Reminder;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -37,13 +38,20 @@ public class CreateReminderService implements CreateReminderUseCase {
 
     @Override
     public Reminder createReminder(CreateReminderCommand command) {
-        Objects.requireNonNull(command, "command must not be null");
+        if (command == null) {
+            throw new ApplicationValidationException("command must not be null");
+        }
 
         if (command.taskId() == null) {
             throw new ApplicationValidationException("taskId must not be null");
         }
         if (command.remindAt() == null) {
             throw new ApplicationValidationException("remindAt must not be null");
+        }
+
+        Instant now = clock.instant();
+        if (command.remindAt().isBefore(now)) {
+            throw new ApplicationValidationException("remindAt must not be in the past");
         }
 
         if (loadTaskPort.loadById(command.taskId()).isEmpty()) {
@@ -53,7 +61,7 @@ public class CreateReminderService implements CreateReminderUseCase {
         Reminder reminder = Reminder.schedule(
                 command.taskId(),
                 command.remindAt(),
-                clock.instant()
+                now
         );
 
         Reminder savedReminder = saveReminderPort.save(reminder);

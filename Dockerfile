@@ -3,17 +3,21 @@ FROM gradle:8.14.4-jdk21 AS build
 
 WORKDIR /workspace
 
-# Копируем весь проект и собираем только bootJar приложения
+# Copy the full project because this is a multi-module Gradle build.
 COPY . .
 
-RUN gradle :apps:web-app:bootJar --no-daemon
+RUN ./gradlew :apps:web-app:bootJar --no-daemon \
+    && mkdir -p /workspace/build/image \
+    && JAR_COUNT="$(find /workspace/apps/web-app/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | wc -l)" \
+    && test "${JAR_COUNT}" -eq 1 \
+    && cp "$(find /workspace/apps/web-app/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar')" /workspace/build/image/app.jar
 
 # ---------- runtime stage ----------
 FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# curl нужен для HEALTHCHECK
+# curl is used by the container HEALTHCHECK.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && groupadd --gid 10001 todo \
@@ -22,7 +26,7 @@ RUN apt-get update \
     && chown -R 10001:10001 /app /tmp \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /workspace/apps/web-app/build/libs/*.jar /app/app.jar
+COPY --from=build /workspace/build/image/app.jar /app/app.jar
 
 ENV SPRING_PROFILES_ACTIVE=prod
 ENV TODO_APP_SERVER_PORT=8080

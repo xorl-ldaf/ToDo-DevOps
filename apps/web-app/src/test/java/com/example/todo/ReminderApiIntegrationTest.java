@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = {WebApplication.class, ReminderApiIntegrationTest.TestClockConfig.class})
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 class ReminderApiIntegrationTest {
 
@@ -138,7 +138,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("task not found: " + missingTaskId)))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -151,7 +151,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("task not found: " + missingTaskId)))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -169,7 +169,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.validationErrors.remindAt", notNullValue()));
+                .andExpect(jsonPath("$.fieldErrors.remindAt", notNullValue()));
     }
 
     @Test
@@ -184,7 +184,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("remindAt must not be in the past")))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -203,7 +203,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("request body is malformed or contains invalid enum/date value")))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     private String createTaskForReminder(String username, String displayName, String taskTitle) throws Exception {

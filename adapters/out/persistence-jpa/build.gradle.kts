@@ -17,6 +17,9 @@ dependencies {
     implementation(libs.jackson.databind)
     runtimeOnly(libs.postgresql)
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.jackson.datatype.jsr310)
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.postgresql)
     testRuntimeOnly(libs.junit.platform.launcher)
 
     compileOnly("org.projectlombok:lombok:1.18.32")

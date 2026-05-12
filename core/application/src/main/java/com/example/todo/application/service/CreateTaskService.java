@@ -28,8 +28,11 @@ public class CreateTaskService implements CreateTaskUseCase {
 
     @Override
     public Task createTask(CreateTaskCommand command) {
-        Objects.requireNonNull(command, "command must not be null");
+        if (command == null) {
+            throw new ApplicationValidationException("command must not be null");
+        }
 
+        requireText(command.title(), "title");
         if (command.authorId() == null) {
             throw new ApplicationValidationException("authorId must not be null");
         }
@@ -53,5 +56,12 @@ public class CreateTaskService implements CreateTaskUseCase {
         );
 
         return saveTaskPort.save(task);
+    }
+
+    private static String requireText(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new ApplicationValidationException(fieldName + " must not be blank");
+        }
+        return value;
     }
 }

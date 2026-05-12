@@ -19,7 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ReminderScheduledEventReceiptPersistenceAdapterTest {
@@ -45,6 +47,18 @@ class ReminderScheduledEventReceiptPersistenceAdapterTest {
 
         assertFalse(saved);
         verify(repository).save(any(ReminderScheduledEventReceiptJpaEntity.class));
+    }
+
+    @Test
+    void saveShouldReturnFalseWhenEventIdAlreadyExists() {
+        ReminderScheduledEventReceipt receipt = receipt();
+        when(repository.existsById(receipt.eventId())).thenReturn(true);
+
+        boolean saved = adapter.save(receipt);
+
+        assertFalse(saved);
+        verify(repository).existsById(receipt.eventId());
+        verify(repository, never()).save(any(ReminderScheduledEventReceiptJpaEntity.class));
     }
 
     @Test

@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @SpringBootTest(classes = {WebApplication.class, ReminderTelegramIntegrationTest.TestClockConfig.class})
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 class ReminderTelegramIntegrationTest {
     private static final Instant INITIAL_TIME = Instant.parse("2026-04-21T10:00:00Z");
@@ -101,7 +101,7 @@ class ReminderTelegramIntegrationTest {
 
         testClock.setInstant(REMIND_AT);
         com.example.todo.application.port.in.ReminderProcessingReport report =
-                scanDueRemindersUseCase.scanAndPublishDueReminders(REMIND_AT);
+                scanDueRemindersUseCase.processDueReminders(REMIND_AT);
 
         assertEquals(1, report.deliveredCount());
         String outboundBody = TELEGRAM_REQUEST_BODIES.poll(5, TimeUnit.SECONDS);

@@ -43,6 +43,8 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
         entity.setEventId(actualEvent.eventId());
         entity.setReminderId(actualEvent.reminderId());
         entity.setTaskId(actualEvent.taskId());
+        entity.setEventType(actualEvent.eventType());
+        entity.setEventVersion(actualEvent.eventVersion());
         entity.setPayload(writePayload(actualEvent));
         entity.setStatus(ReminderScheduledEventOutboxStatus.PENDING);
         entity.setCreatedAt(actualEvent.occurredAt());

@@ -20,6 +20,12 @@ dependencies {
     implementation(libs.jackson.databind)
     implementation(libs.spring.kafka)
     implementation(libs.spring.boot.starter.actuator)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.mockito.junit.jupiter)
+    testImplementation(libs.jackson.datatype.jsr310)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {

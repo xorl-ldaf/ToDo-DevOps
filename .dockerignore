@@ -2,7 +2,12 @@
 .github
 .gradle
 .idea
+.vscode
+out
 **/build
 **/.DS_Store
 *.iml
+*.log
 .env
+.env.*
+!.env.example

@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = WebApplication.class)
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 @ActiveProfiles("test")
 class UserApiIntegrationTest {
 
@@ -110,7 +110,7 @@ class UserApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("user not found: " + missingUserId)))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     @Test
@@ -129,7 +129,7 @@ class UserApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.validationErrors.username", notNullValue()));
+                .andExpect(jsonPath("$.fieldErrors.username", notNullValue()));
     }
 
     @Test
@@ -150,7 +150,7 @@ class UserApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(409)))
                 .andExpect(jsonPath("$.error", is("Conflict")))
                 .andExpect(jsonPath("$.message", is("username already exists: duplicate.user")))
-                .andExpect(jsonPath("$.validationErrors").isMap());
+                .andExpect(jsonPath("$.fieldErrors").isMap());
     }
 
     private String createUser(String username, String displayName, Long telegramChatId) throws Exception {
