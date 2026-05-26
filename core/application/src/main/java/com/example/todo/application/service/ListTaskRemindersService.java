@@ -4,10 +4,12 @@ import com.example.todo.application.policy.TaskReferencePolicy;
 import com.example.todo.application.port.in.ListTaskRemindersUseCase;
 import com.example.todo.application.port.out.LoadTaskPort;
 import com.example.todo.application.port.out.LoadTaskRemindersPort;
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.reminder.Reminder;
+import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.task.TaskId;
 
-import java.util.List;
 import java.util.Objects;
 
 public class ListTaskRemindersService implements ListTaskRemindersUseCase {
@@ -23,8 +25,12 @@ public class ListTaskRemindersService implements ListTaskRemindersUseCase {
     }
 
     @Override
-    public List<Reminder> listTaskReminders(TaskId taskId) {
+    public PageResult<Reminder> listTaskReminders(TaskId taskId, PageQuery pageQuery, ReminderStatus status) {
         taskReferencePolicy.requireTaskExists(taskId);
-        return loadTaskRemindersPort.loadByTaskId(taskId);
+        return loadTaskRemindersPort.loadByTaskId(
+                taskId,
+                Objects.requireNonNull(pageQuery, "pageQuery must not be null"),
+                status
+        );
     }
 }

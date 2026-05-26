@@ -2,9 +2,10 @@ package com.example.todo.application.service;
 
 import com.example.todo.application.port.in.ListUsersUseCase;
 import com.example.todo.application.port.out.LoadAllUsersPort;
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.user.User;
 
-import java.util.List;
 import java.util.Objects;
 
 public class ListUsersService implements ListUsersUseCase {
@@ -15,7 +16,7 @@ public class ListUsersService implements ListUsersUseCase {
     }
 
     @Override
-    public List<User> listUsers() {
-        return loadAllUsersPort.loadAll();
+    public PageResult<User> listUsers(PageQuery pageQuery) {
+        return loadAllUsersPort.load(Objects.requireNonNull(pageQuery, "pageQuery must not be null"));
     }
 }

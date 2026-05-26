@@ -2,19 +2,22 @@ package com.example.todo.adapter.in.web.controller;
 
 import com.example.todo.adapter.in.web.dto.AssignTaskRequest;
 import com.example.todo.adapter.in.web.dto.CreateTaskRequest;
+import com.example.todo.adapter.in.web.dto.PageResponse;
+import com.example.todo.adapter.in.web.dto.TaskPriorityDto;
 import com.example.todo.adapter.in.web.dto.TaskResponse;
+import com.example.todo.adapter.in.web.dto.TaskStatusDto;
 import com.example.todo.adapter.in.web.mapper.WebApiMapper;
 import com.example.todo.application.port.in.AssignTaskUseCase;
 import com.example.todo.application.port.in.CreateTaskUseCase;
 import com.example.todo.application.port.in.GetTaskUseCase;
 import com.example.todo.application.port.in.ListTasksUseCase;
+import com.example.todo.application.query.PageQuery;
 import com.example.todo.domain.task.TaskId;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -48,11 +51,21 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<TaskResponse> listTasks() {
-        return listTasksUseCase.listTasks()
-                .stream()
-                .map(WebApiMapper::toResponse)
-                .toList();
+    public PageResponse<TaskResponse> listTasks(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sort", required = false) String sort,
+            @RequestParam(name = "status", required = false) TaskStatusDto status,
+            @RequestParam(name = "priority", required = false) TaskPriorityDto priority
+    ) {
+        return WebApiMapper.toResponse(
+                listTasksUseCase.listTasks(
+                        new PageQuery(page, size, sort),
+                        WebApiMapper.toDomain(status),
+                        WebApiMapper.toDomain(priority)
+                ),
+                WebApiMapper::toResponse
+        );
     }
 
     @GetMapping("/{taskId}")

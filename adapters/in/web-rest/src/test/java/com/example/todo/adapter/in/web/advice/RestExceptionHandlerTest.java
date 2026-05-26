@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
@@ -37,10 +38,11 @@ class RestExceptionHandlerTest {
                 .andExpect(jsonPath("$.timestamp", notNullValue()))
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
-                .andExpect(jsonPath("$.errorCode", is("APPLICATION_VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.message", is("invalid command")))
                 .andExpect(jsonPath("$.path", is("/throw/application-validation")))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors").isArray())
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)))
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     @Test
@@ -49,8 +51,8 @@ class RestExceptionHandlerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
-                .andExpect(jsonPath("$.errorCode", is("RESOURCE_NOT_FOUND")))
-                .andExpect(jsonPath("$.message", is("task not found")));
+                .andExpect(jsonPath("$.message", is("task not found")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -59,8 +61,8 @@ class RestExceptionHandlerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status", is(409)))
                 .andExpect(jsonPath("$.error", is("Conflict")))
-                .andExpect(jsonPath("$.errorCode", is("ALREADY_EXISTS")))
-                .andExpect(jsonPath("$.message", is("username already exists")));
+                .andExpect(jsonPath("$.message", is("username already exists")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -69,8 +71,8 @@ class RestExceptionHandlerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status", is(409)))
                 .andExpect(jsonPath("$.error", is("Conflict")))
-                .andExpect(jsonPath("$.errorCode", is("INVALID_STATE")))
-                .andExpect(jsonPath("$.message", is("task cannot be reassigned")));
+                .andExpect(jsonPath("$.message", is("task cannot be reassigned")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -79,11 +81,12 @@ class RestExceptionHandlerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status", is(500)))
                 .andExpect(jsonPath("$.error", is("Internal Server Error")))
-                .andExpect(jsonPath("$.errorCode", is("INTERNAL_ERROR")))
                 .andExpect(jsonPath("$.message", is("unexpected internal error")))
                 .andExpect(jsonPath("$.message", not(containsString("database password"))))
                 .andExpect(jsonPath("$.message", startsWith("unexpected")))
-                .andExpect(jsonPath("$.path", is("/throw/unexpected")));
+                .andExpect(jsonPath("$.path", is("/throw/unexpected")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)))
+                .andExpect(jsonPath("$.trace").doesNotExist());
     }
 
     @RestController

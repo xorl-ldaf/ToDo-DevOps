@@ -19,6 +19,10 @@ public class GetUserService implements GetUserUseCase {
 
     @Override
     public Optional<User> getUser(UserId userId) {
+        if (userId == null) {
+            throw new ApplicationValidationException("userId must not be null");
+        }
+
         return loadUserDetailsPort.loadById(userId);
     }
 

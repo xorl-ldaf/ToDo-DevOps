@@ -1,6 +1,8 @@
 package com.example.todo.application.service;
 
 import com.example.todo.application.port.out.LoadAllUsersPort;
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.user.User;
 import com.example.todo.domain.user.UserId;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +35,7 @@ class ListUsersServiceTest {
 
     @Test
     void listUsersShouldDelegateToLoadPort() {
+        PageQuery pageQuery = new PageQuery(0, 20, null);
         User firstUser = new User(
                 new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111")),
                 "alice",
@@ -49,12 +52,13 @@ class ListUsersServiceTest {
                 Instant.parse("2026-04-20T10:00:00Z"),
                 Instant.parse("2026-04-20T10:00:00Z")
         );
-        when(loadAllUsersPort.loadAll()).thenReturn(List.of(firstUser, secondUser));
+        PageResult<User> page = new PageResult<>(List.of(firstUser, secondUser), 0, 20, 2, 1);
+        when(loadAllUsersPort.load(pageQuery)).thenReturn(page);
 
-        List<User> result = service.listUsers();
+        PageResult<User> result = service.listUsers(pageQuery);
 
-        assertEquals(List.of(firstUser, secondUser), result);
-        verify(loadAllUsersPort).loadAll();
+        assertEquals(page, result);
+        verify(loadAllUsersPort).load(pageQuery);
         verifyNoMoreInteractions(loadAllUsersPort);
     }
 }

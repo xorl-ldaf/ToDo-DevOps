@@ -234,8 +234,8 @@ jobs:
 
           with open("/tmp/todo-users.json", encoding="utf-8") as handle:
               users = json.load(handle)
-          if not isinstance(users, list):
-              raise SystemExit(f"/api/users did not return a JSON array: {users}")
+          if not isinstance(users, dict) or not isinstance(users.get("items"), list):
+              raise SystemExit(f"/api/users did not return a paginated response: {users}")
           PY
 
       - name: Dump cluster state on failure

@@ -4,6 +4,7 @@ import com.example.todo.adapter.in.web.dto.AssignTaskRequest;
 import com.example.todo.adapter.in.web.dto.CreateReminderRequest;
 import com.example.todo.adapter.in.web.dto.CreateTaskRequest;
 import com.example.todo.adapter.in.web.dto.CreateUserRequest;
+import com.example.todo.adapter.in.web.dto.PageResponse;
 import com.example.todo.adapter.in.web.dto.ReminderResponse;
 import com.example.todo.adapter.in.web.dto.ReminderStatusDto;
 import com.example.todo.adapter.in.web.dto.TaskPriorityDto;
@@ -14,6 +15,7 @@ import com.example.todo.application.command.AssignTaskCommand;
 import com.example.todo.application.command.CreateReminderCommand;
 import com.example.todo.application.command.CreateTaskCommand;
 import com.example.todo.application.command.CreateUserCommand;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.shared.TelegramChatId;
@@ -25,6 +27,7 @@ import com.example.todo.domain.user.User;
 import com.example.todo.domain.user.UserId;
 
 import java.util.UUID;
+import java.util.function.Function;
 
 public final class WebApiMapper {
 
@@ -102,7 +105,17 @@ public final class WebApiMapper {
         );
     }
 
-    private static TaskPriority toDomain(TaskPriorityDto value) {
+    public static <T, R> PageResponse<R> toResponse(PageResult<T> pageResult, Function<T, R> itemMapper) {
+        return new PageResponse<>(
+                pageResult.items().stream().map(itemMapper).toList(),
+                pageResult.page(),
+                pageResult.size(),
+                pageResult.totalElements(),
+                pageResult.totalPages()
+        );
+    }
+
+    public static TaskPriority toDomain(TaskPriorityDto value) {
         if (value == null) {
             return null;
         }
@@ -112,6 +125,32 @@ public final class WebApiMapper {
             case MEDIUM -> TaskPriority.MEDIUM;
             case HIGH -> TaskPriority.HIGH;
             case CRITICAL -> TaskPriority.CRITICAL;
+        };
+    }
+
+    public static TaskStatus toDomain(TaskStatusDto value) {
+        if (value == null) {
+            return null;
+        }
+
+        return switch (value) {
+            case OPEN -> TaskStatus.OPEN;
+            case IN_PROGRESS -> TaskStatus.IN_PROGRESS;
+            case DONE -> TaskStatus.DONE;
+            case CANCELLED -> TaskStatus.CANCELLED;
+        };
+    }
+
+    public static ReminderStatus toDomain(ReminderStatusDto value) {
+        if (value == null) {
+            return null;
+        }
+
+        return switch (value) {
+            case SCHEDULED -> ReminderStatus.SCHEDULED;
+            case PROCESSING -> ReminderStatus.PROCESSING;
+            case DELIVERED -> ReminderStatus.DELIVERED;
+            case FAILED -> ReminderStatus.FAILED;
         };
     }
 

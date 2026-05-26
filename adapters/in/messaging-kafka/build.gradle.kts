@@ -14,7 +14,7 @@ java {
 }
 
 dependencies {
-    api(project(":core:application"))
+    implementation(project(":core:application"))
 
     implementation(platform(libs.spring.boot.bom))
     implementation(libs.jackson.databind)

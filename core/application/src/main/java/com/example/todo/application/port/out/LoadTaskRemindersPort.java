@@ -1,10 +1,11 @@
 package com.example.todo.application.port.out;
 
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.reminder.Reminder;
+import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.task.TaskId;
 
-import java.util.List;
-
 public interface LoadTaskRemindersPort {
-    List<Reminder> loadByTaskId(TaskId taskId);
+    PageResult<Reminder> loadByTaskId(TaskId taskId, PageQuery pageQuery, ReminderStatus status);
 }

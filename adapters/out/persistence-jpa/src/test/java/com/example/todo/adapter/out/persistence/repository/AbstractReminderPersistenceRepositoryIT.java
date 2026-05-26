@@ -1,6 +1,8 @@
 package com.example.todo.adapter.out.persistence.repository;
 
 import com.example.todo.adapter.out.persistence.adapter.ReminderPersistenceAdapter;
+import com.example.todo.adapter.out.persistence.adapter.TaskPersistenceAdapter;
+import com.example.todo.adapter.out.persistence.adapter.UserPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.entity.ReminderJpaEntity;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderId;
@@ -59,7 +61,19 @@ abstract class AbstractReminderPersistenceRepositoryIT {
     protected SpringDataReminderScheduledEventReceiptRepository receiptRepository;
 
     @Autowired
+    protected SpringDataTaskRepository taskRepository;
+
+    @Autowired
+    protected SpringDataUserRepository userRepository;
+
+    @Autowired
     protected ReminderPersistenceAdapter adapter;
+
+    @Autowired
+    protected TaskPersistenceAdapter taskAdapter;
+
+    @Autowired
+    protected UserPersistenceAdapter userAdapter;
 
     @BeforeEach
     void resetSchema() {
@@ -327,6 +341,16 @@ abstract class AbstractReminderPersistenceRepositoryIT {
         @Bean
         ReminderPersistenceAdapter reminderPersistenceAdapter(SpringDataReminderRepository repository) {
             return new ReminderPersistenceAdapter(repository);
+        }
+
+        @Bean
+        TaskPersistenceAdapter taskPersistenceAdapter(SpringDataTaskRepository repository) {
+            return new TaskPersistenceAdapter(repository);
+        }
+
+        @Bean
+        UserPersistenceAdapter userPersistenceAdapter(SpringDataUserRepository repository) {
+            return new UserPersistenceAdapter(repository);
         }
     }
 }

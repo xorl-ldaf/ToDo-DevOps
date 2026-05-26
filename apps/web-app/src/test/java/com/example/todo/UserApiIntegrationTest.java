@@ -83,11 +83,15 @@ class UserApiIntegrationTest {
 
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id", notNullValue()))
-                .andExpect(jsonPath("$[0].username", is("list.user")))
-                .andExpect(jsonPath("$[0].displayName", is("List User")))
-                .andExpect(jsonPath("$[0].telegramChatId").doesNotExist());
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id", notNullValue()))
+                .andExpect(jsonPath("$.items[0].username", is("list.user")))
+                .andExpect(jsonPath("$.items[0].displayName", is("List User")))
+                .andExpect(jsonPath("$.items[0].telegramChatId").doesNotExist())
+                .andExpect(jsonPath("$.page", is(0)))
+                .andExpect(jsonPath("$.size", is(20)))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.totalPages", is(1)));
     }
 
     @Test
@@ -112,7 +116,7 @@ class UserApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("user not found: " + missingUserId)))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -131,7 +135,9 @@ class UserApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.fieldErrors.username", notNullValue()));
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("username")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
     }
 
     @Test
@@ -152,7 +158,7 @@ class UserApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(409)))
                 .andExpect(jsonPath("$.error", is("Conflict")))
                 .andExpect(jsonPath("$.message", is("username already exists: duplicate.user")))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     private String createUser(String username, String displayName, Long telegramChatId) throws Exception {

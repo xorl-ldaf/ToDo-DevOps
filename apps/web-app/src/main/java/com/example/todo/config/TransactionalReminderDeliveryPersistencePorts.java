@@ -3,6 +3,7 @@ package com.example.todo.config;
 import com.example.todo.application.port.out.ClaimDueRemindersPort;
 import com.example.todo.application.port.out.FinalizeReminderDeliveryPort;
 import com.example.todo.domain.reminder.Reminder;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -39,6 +40,7 @@ public final class TransactionalReminderDeliveryPersistencePorts implements
         );
         Objects.requireNonNull(transactionManager, "transactionManager must not be null");
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override

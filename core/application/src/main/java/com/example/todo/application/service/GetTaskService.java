@@ -20,7 +20,7 @@ public class GetTaskService implements GetTaskUseCase {
 
     @Override
     public Optional<Task> getTask(TaskId taskId) {
-        return loadTaskPort.loadById(taskId);
+        return loadTaskPort.loadById(taskReferencePolicy.requireTaskId(taskId));
     }
 
     @Override

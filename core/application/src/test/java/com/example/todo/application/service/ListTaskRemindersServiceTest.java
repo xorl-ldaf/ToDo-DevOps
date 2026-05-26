@@ -1,8 +1,11 @@
 package com.example.todo.application.service;
 
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.out.LoadTaskPort;
 import com.example.todo.application.port.out.LoadTaskRemindersPort;
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderId;
 import com.example.todo.domain.reminder.ReminderStatus;
@@ -48,6 +51,7 @@ class ListTaskRemindersServiceTest {
     @Test
     void listTaskRemindersShouldLoadRemindersForExistingTask() {
         TaskId taskId = new TaskId(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        PageQuery pageQuery = new PageQuery(0, 20, "remindAt,asc");
         Reminder reminder = Reminder.restore(
                 new ReminderId(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")),
                 taskId,
@@ -63,14 +67,15 @@ class ListTaskRemindersServiceTest {
                 null
         );
         when(loadTaskPort.loadById(taskId)).thenReturn(Optional.of(task(taskId)));
-        when(loadTaskRemindersPort.loadByTaskId(taskId)).thenReturn(List.of(reminder));
+        PageResult<Reminder> page = new PageResult<>(List.of(reminder), 0, 20, 1, 1);
+        when(loadTaskRemindersPort.loadByTaskId(taskId, pageQuery, ReminderStatus.SCHEDULED)).thenReturn(page);
 
-        List<Reminder> result = service.listTaskReminders(taskId);
+        PageResult<Reminder> result = service.listTaskReminders(taskId, pageQuery, ReminderStatus.SCHEDULED);
 
-        assertEquals(List.of(reminder), result);
+        assertEquals(page, result);
         InOrder inOrder = inOrder(loadTaskPort, loadTaskRemindersPort);
         inOrder.verify(loadTaskPort).loadById(taskId);
-        inOrder.verify(loadTaskRemindersPort).loadByTaskId(taskId);
+        inOrder.verify(loadTaskRemindersPort).loadByTaskId(taskId, pageQuery, ReminderStatus.SCHEDULED);
         verifyNoMoreInteractions(loadTaskPort, loadTaskRemindersPort);
     }
 
@@ -81,13 +86,24 @@ class ListTaskRemindersServiceTest {
 
         ResourceNotFoundException exception = assertThrows(
                 ResourceNotFoundException.class,
-                () -> service.listTaskReminders(taskId)
+                () -> service.listTaskReminders(taskId, new PageQuery(0, 20, null), null)
         );
 
         assertEquals("task not found: " + taskId.value(), exception.getMessage());
         verify(loadTaskPort).loadById(taskId);
         verifyNoMoreInteractions(loadTaskPort);
         verifyNoInteractions(loadTaskRemindersPort);
+    }
+
+    @Test
+    void listTaskRemindersShouldRejectNullTaskIdWithoutCallingPorts() {
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.listTaskReminders(null, new PageQuery(0, 20, null), null)
+        );
+
+        assertEquals("taskId must not be null", exception.getMessage());
+        verifyNoInteractions(loadTaskPort, loadTaskRemindersPort);
     }
 
     private Task task(TaskId taskId) {

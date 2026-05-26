@@ -14,6 +14,13 @@ class ArchitectureTest {
     private static final String DOMAIN = "com.example.todo.domain..";
     private static final String APPLICATION = "com.example.todo.application..";
     private static final String ADAPTERS = "com.example.todo.adapter..";
+    private static final String INBOUND_ADAPTERS = "com.example.todo.adapter.in..";
+    private static final String OUTBOUND_ADAPTERS = "com.example.todo.adapter.out..";
+    private static final String WEB_REST_ADAPTER = "com.example.todo.adapter.in.web..";
+    private static final String MESSAGING_KAFKA_IN_ADAPTER = "com.example.todo.adapter.in.kafka..";
+    private static final String PERSISTENCE_JPA_ADAPTER = "com.example.todo.adapter.out.persistence..";
+    private static final String MESSAGING_KAFKA_OUT_ADAPTER = "com.example.todo.adapter.out.kafka..";
+    private static final String MESSAGING_TELEGRAM_OUT_ADAPTER = "com.example.todo.adapter.out.telegram..";
     private static final String WEB_APP_ROOT = "com.example.todo";
     private static final String WEB_APP_CONFIG = "com.example.todo.config..";
     private static final String WEB_DTOS = "com.example.todo.adapter.in.web.dto..";
@@ -133,6 +140,84 @@ class ArchitectureTest {
                 .as("adapters may depend inward on application/domain, but not outward on the web-app composition root");
 
         rule.check(productionClasses);
+    }
+
+    @Test
+    void inbound_adapters_do_not_depend_on_outbound_adapters() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage(INBOUND_ADAPTERS)
+                .should().dependOnClassesThat().resideInAPackage(OUTBOUND_ADAPTERS)
+                .as("inbound adapters call application use cases and do not depend on persistence or publisher adapters");
+
+        rule.check(productionClasses);
+    }
+
+    @Test
+    void outbound_adapters_do_not_depend_on_inbound_adapters() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage(OUTBOUND_ADAPTERS)
+                .should().dependOnClassesThat().resideInAPackage(INBOUND_ADAPTERS)
+                .as("outbound adapters implement application ports and do not depend on REST or consumer adapters");
+
+        rule.check(productionClasses);
+    }
+
+    @Test
+    void adapter_modules_do_not_depend_on_each_other_sideways() {
+        noClasses()
+                .that().resideInAPackage(WEB_REST_ADAPTER)
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        MESSAGING_KAFKA_IN_ADAPTER,
+                        PERSISTENCE_JPA_ADAPTER,
+                        MESSAGING_KAFKA_OUT_ADAPTER,
+                        MESSAGING_TELEGRAM_OUT_ADAPTER
+                )
+                .as("web-rest adapter talks to application use cases, not to Kafka, persistence, or Telegram adapters")
+                .check(productionClasses);
+
+        noClasses()
+                .that().resideInAPackage(MESSAGING_KAFKA_IN_ADAPTER)
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        WEB_REST_ADAPTER,
+                        PERSISTENCE_JPA_ADAPTER,
+                        MESSAGING_KAFKA_OUT_ADAPTER,
+                        MESSAGING_TELEGRAM_OUT_ADAPTER
+                )
+                .as("Kafka inbound adapter talks to application use cases, not to web or outbound adapters")
+                .check(productionClasses);
+
+        noClasses()
+                .that().resideInAPackage(PERSISTENCE_JPA_ADAPTER)
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        WEB_REST_ADAPTER,
+                        MESSAGING_KAFKA_IN_ADAPTER,
+                        MESSAGING_KAFKA_OUT_ADAPTER,
+                        MESSAGING_TELEGRAM_OUT_ADAPTER
+                )
+                .as("persistence adapter implements ports and does not call web, Kafka publisher, or Telegram adapters")
+                .check(productionClasses);
+
+        noClasses()
+                .that().resideInAPackage(MESSAGING_KAFKA_OUT_ADAPTER)
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        WEB_REST_ADAPTER,
+                        MESSAGING_KAFKA_IN_ADAPTER,
+                        PERSISTENCE_JPA_ADAPTER,
+                        MESSAGING_TELEGRAM_OUT_ADAPTER
+                )
+                .as("Kafka publisher adapter implements ports and does not call web, consumer, persistence, or Telegram adapters")
+                .check(productionClasses);
+
+        noClasses()
+                .that().resideInAPackage(MESSAGING_TELEGRAM_OUT_ADAPTER)
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        WEB_REST_ADAPTER,
+                        MESSAGING_KAFKA_IN_ADAPTER,
+                        PERSISTENCE_JPA_ADAPTER,
+                        MESSAGING_KAFKA_OUT_ADAPTER
+                )
+                .as("Telegram adapter implements ports and does not call web, Kafka, or persistence adapters")
+                .check(productionClasses);
     }
 
     @Test

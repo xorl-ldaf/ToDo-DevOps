@@ -72,17 +72,6 @@ class CreateUserServiceTest {
     }
 
     @Test
-    void createUserShouldRejectBlankUsername() {
-        ApplicationValidationException exception = assertThrows(
-                ApplicationValidationException.class,
-                () -> service.createUser(new CreateUserCommand("   ", "Alice", null))
-        );
-
-        assertEquals("username must not be blank", exception.getMessage());
-        verifyNoInteractions(loadUserPort, saveUserPort);
-    }
-
-    @Test
     void createUserShouldRejectNullCommandBeforeCallingPorts() {
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,
@@ -94,10 +83,21 @@ class CreateUserServiceTest {
     }
 
     @Test
-    void createUserShouldRejectBlankDisplayName() {
+    void createUserShouldRejectBlankUsernameBeforeCallingPorts() {
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,
-                () -> service.createUser(new CreateUserCommand("alice", "", null))
+                () -> service.createUser(new CreateUserCommand(" ", "Alice", null))
+        );
+
+        assertEquals("username must not be blank", exception.getMessage());
+        verifyNoInteractions(loadUserPort, saveUserPort);
+    }
+
+    @Test
+    void createUserShouldRejectBlankDisplayNameBeforeCallingPorts() {
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.createUser(new CreateUserCommand("alice", " ", null))
         );
 
         assertEquals("displayName must not be blank", exception.getMessage());

@@ -1,9 +1,9 @@
 package com.example.todo.application.port.in;
 
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.user.User;
 
-import java.util.List;
-
 public interface ListUsersUseCase {
-    List<User> listUsers();
+    PageResult<User> listUsers(PageQuery pageQuery);
 }

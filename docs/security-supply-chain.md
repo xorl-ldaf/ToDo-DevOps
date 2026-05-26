@@ -64,6 +64,17 @@ Attaches the generated CycloneDX SBOM to the published image as an attestation.
 
 Verifies the SBOM attestation via GitHub API and via OCI registry bundle.
 
+## Config and secrets posture
+
+The repository intentionally stores only example values:
+
+- `.env.example` contains local placeholders and is meant to be copied to a private `.env`.
+- Kubernetes `secret.env` files are Kustomize examples, not real production secrets.
+- GitHub Actions secrets are referenced through `${{ secrets.* }}` and are not stored in the repository.
+- A real production Kubernetes deployment should use an external secret manager integration. This baseline documents that need but does not add Vault, External Secrets Operator, or cloud-specific secret resources.
+
+Do not commit real database passwords, Telegram bot tokens, kubeconfigs, registry credentials, or Grafana admin passwords.
+
 ## Runtime hardening implemented here
 
 ### Container image baseline

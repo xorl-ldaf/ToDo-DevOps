@@ -15,8 +15,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  security-events: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -26,10 +24,29 @@ env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/todo-devops
 
 jobs:
-  build-and-verify:
-    name: Build and verify
+  compose-config:
+    name: Validate Docker Compose config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Validate application Compose file
+        run: docker compose -f compose.yaml config -q
+
+      - name: Validate smoke Compose file
+        run: docker compose -f compose.smoke.yaml config -q
+
+  gradle-build-test:
+    name: Gradle build and test
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -40,16 +57,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
+
+      - name: Set up Gradle dependency cache
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Make Gradle Wrapper executable
         run: chmod +x ./gradlew
-
-      - name: Validate Docker Compose file
-        run: docker compose -f compose.yaml config -q
-
-      - name: Validate smoke Compose file
-        run: docker compose -f compose.smoke.yaml config -q
 
       - name: Build project with Gradle
         run: ./gradlew clean build --no-daemon
@@ -62,10 +75,15 @@ jobs:
           if-no-files-found: error
 
   docker-image:
-    name: Build and publish image
+    name: Build Docker image
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: build-and-verify
+    needs:
+      - compose-config
+      - gradle-build-test
+    permissions:
+      contents: read
+      packages: write
     outputs:
       smoke_image: ${{ format('{0}:sha-{1}', env.IMAGE_NAME, github.sha) }}
       image_digest_ref: ${{ github.event_name != 'pull_request' && format('{0}@{1}', env.IMAGE_NAME, steps.docker_build.outputs.digest) || '' }}
@@ -180,6 +198,9 @@ jobs:
     timeout-minutes: 20
     needs: docker-image
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Checkout repository
@@ -249,11 +270,15 @@ jobs:
         run: docker compose -f compose.smoke.yaml down -v
 
   security-scan-image:
-    name: Scan published image and generate SBOM
+    name: Trivy scan and SBOM
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: docker-image
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
 
     steps:
       - name: Checkout repository
@@ -432,6 +457,9 @@ jobs:
       - docker-image
       - sign-image
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Install Cosign
@@ -574,6 +602,10 @@ jobs:
       - docker-image
       - attest-image-provenance
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
 
     steps:
       - name: Check GitHub Container Registry availability
@@ -748,6 +780,10 @@ jobs:
       - docker-image
       - attest-image-sbom
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
 
     steps:
       - name: Check GitHub Container Registry availability

@@ -22,6 +22,7 @@ spec:
         app.kubernetes.io/component: web-app
         app.kubernetes.io/part-of: todo-devops
     spec:
+      automountServiceAccountToken: false
       terminationGracePeriodSeconds: 45
       securityContext:
         runAsNonRoot: true
@@ -59,6 +60,7 @@ spec:
             - name: http
               containerPort: 8080
           securityContext:
+            runAsNonRoot: true
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:

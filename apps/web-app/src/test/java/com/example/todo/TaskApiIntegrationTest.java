@@ -115,13 +115,17 @@ class TaskApiIntegrationTest {
 
         mockMvc.perform(get("/api/tasks"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id", is(taskId)))
-                .andExpect(jsonPath("$[0].authorId", is(authorId)))
-                .andExpect(jsonPath("$[0].assigneeId", is(authorId)))
-                .andExpect(jsonPath("$[0].title", is("List task smoke check")))
-                .andExpect(jsonPath("$[0].status", is("OPEN")))
-                .andExpect(jsonPath("$[0].priority", is("HIGH")));
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id", is(taskId)))
+                .andExpect(jsonPath("$.items[0].authorId", is(authorId)))
+                .andExpect(jsonPath("$.items[0].assigneeId", is(authorId)))
+                .andExpect(jsonPath("$.items[0].title", is("List task smoke check")))
+                .andExpect(jsonPath("$.items[0].status", is("OPEN")))
+                .andExpect(jsonPath("$.items[0].priority", is("HIGH")))
+                .andExpect(jsonPath("$.page", is(0)))
+                .andExpect(jsonPath("$.size", is(20)))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.totalPages", is(1)));
     }
 
     @Test
@@ -190,7 +194,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("task not found: " + missingTaskId)))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -212,7 +216,9 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.fieldErrors.title", notNullValue()));
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("title")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
     }
 
     @Test
@@ -230,7 +236,9 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.fieldErrors.authorId", notNullValue()));
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("authorId")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
     }
 
     @Test
@@ -252,7 +260,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("author not found: " + missingAuthorId)))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -275,7 +283,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("assignee not found: " + missingAssigneeId)))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -291,7 +299,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("task not found: " + missingTaskId)))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -315,7 +323,7 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("assignee not found: " + missingAssigneeId)))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -342,7 +350,9 @@ class TaskApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.fieldErrors.assigneeId", notNullValue()));
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("assigneeId")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
     }
 
     private String createUser(String username, String displayName, Long telegramChatId) throws Exception {

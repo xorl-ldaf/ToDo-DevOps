@@ -46,6 +46,53 @@ The main rules:
 
 This keeps the codebase testable at multiple levels: domain tests, application service tests with fake ports, adapter tests, and Spring integration tests.
 
+## Dependency rules
+
+Gradle dependencies follow the same inward direction:
+
+- `core/domain` is the innermost module. It has no project dependencies and its production code must not import Spring, JPA, Kafka, Telegram, servlet, JDBC, PostgreSQL, web, or adapter packages.
+- `core/application` exposes the use-case and port contracts and has `api(project(":core:domain"))` because those contracts use domain types. Its production code stays free of Spring, JPA, Kafka, Telegram, servlet, JDBC, PostgreSQL, and adapter packages.
+- `adapters/in/*` use `implementation(project(":core:application"))`. They may call application input ports and map transport payloads to application commands/domain identifiers, but they must not depend on `adapters/out/*`.
+- `adapters/out/*` use `implementation(project(":core:application"))`. They implement application output ports and may use their own infrastructure libraries, but they must not depend on `adapters/in/*` or `apps/web-app`.
+- `apps/web-app` is the composition root. It depends on `core/application` and all selected adapter modules, configures Spring Boot runtime wiring, transactions, schedulers, persistence scanning, Kafka, Telegram, Flyway, and application properties.
+
+The runtime application should be assembled from the outside in: framework and infrastructure choices live in adapters or `apps/web-app`; domain and application code stay independent of those choices.
+
+## Architecture Tests
+
+The onion boundaries are enforced by ArchUnit in `apps/web-app/src/test/java/com/example/todo/ArchitectureTest.java`. The test runs with `./gradlew test` and imports production classes only.
+
+Rules enforced by the test:
+
+- `core/domain` must not depend on `core/application`, adapters, Spring, JPA, Kafka, servlet APIs, JDBC/PostgreSQL, Telegram, or web APIs.
+- `core/application` may depend on `core/domain`, but must not depend on adapters, Spring, JPA, Kafka, servlet APIs, JDBC/PostgreSQL, Telegram, or web APIs.
+- inbound adapters must not depend on outbound adapters.
+- outbound adapters must not depend on inbound adapters.
+- adapter modules must not depend sideways on sibling adapters; communication goes through application ports/use cases.
+- adapters must not depend on the `apps/web-app` composition root.
+- web DTOs and JPA entities must not leak into domain/application.
+
+These tests are deliberately lightweight. They catch accidental imports and dependency direction regressions without adding a heavy architecture analysis toolchain.
+
+## Transaction Boundaries
+
+Transaction management is a runtime concern and stays outside `core/domain` and `core/application`. Core services express the business steps through ports; `apps/web-app` defines the Spring transaction boundaries with `TransactionTemplate` wrappers.
+
+Current boundaries:
+
+- `CreateUserUseCase`, `CreateTaskUseCase`, and `AssignTaskUseCase` are wrapped in one required transaction because each command combines validation reads with a write.
+- `CreateReminderUseCase` is wrapped in one required transaction. The reminder row and, when Kafka is enabled, the `reminder_scheduled_event_outbox` row commit atomically.
+- Reminder delivery claim and finalize calls are wrapped by `TransactionalReminderDeliveryPersistencePorts` in separate short `REQUIRES_NEW` transactions.
+- Outbox claim and finalize calls are wrapped by `TransactionalReminderScheduledEventOutboxPorts` in separate short `REQUIRES_NEW` transactions.
+- Query use cases rely on short repository-level reads and do not hold explicit long-running transactions.
+
+External calls are not made inside long database transactions:
+
+- Telegram delivery happens after reminder claim commits and before finalize starts.
+- Kafka publication happens after outbox claim commits and before outbox finalize starts.
+
+Adapters may use Spring Data/JPA internally, but Spring transaction APIs and annotations must not leak into core.
+
 ## REST API Surface
 
 The implemented HTTP API is intentionally small:

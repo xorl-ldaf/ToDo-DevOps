@@ -2,6 +2,8 @@ package com.example.todo.adapter.out.persistence.repository;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderJpaEntity;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -50,5 +52,7 @@ public interface SpringDataReminderRepository extends JpaRepository<ReminderJpaE
             @Param("processingOwner") String processingOwner
     );
 
-    List<ReminderJpaEntity> findByTaskIdOrderByRemindAtAsc(UUID taskId);
+    Page<ReminderJpaEntity> findByTaskId(UUID taskId, Pageable pageable);
+
+    Page<ReminderJpaEntity> findByTaskIdAndStatus(UUID taskId, String status, Pageable pageable);
 }

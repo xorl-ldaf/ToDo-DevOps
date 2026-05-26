@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${TODO_DB_NAME:-todo}
       POSTGRES_USER: ${TODO_DB_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${TODO_DB_PASSWORD:-change-me-smoke-db-password}
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -31,7 +31,7 @@ services:
       TODO_DB_PORT: 5432
       TODO_DB_NAME: ${TODO_DB_NAME:-todo}
       TODO_DB_USERNAME: ${TODO_DB_USERNAME:-postgres}
-      TODO_DB_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
+      TODO_DB_PASSWORD: ${TODO_DB_PASSWORD:-change-me-smoke-db-password}
       TODO_KAFKA_ENABLED: "false"
 
     ports:

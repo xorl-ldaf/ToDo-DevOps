@@ -85,6 +85,42 @@ class CreateTaskServiceTest {
     }
 
     @Test
+    void createTaskShouldSaveExplicitAssigneePriorityDescriptionAndDueAt() {
+        UserId authorId = userId("11111111-1111-1111-1111-111111111111");
+        UserId assigneeId = userId("22222222-2222-2222-2222-222222222222");
+        Instant dueAt = NOW.plusSeconds(3600);
+        CreateTaskCommand command = new CreateTaskCommand(
+                "Priority task",
+                "explicit fields",
+                authorId,
+                assigneeId,
+                TaskPriority.CRITICAL,
+                dueAt
+        );
+        when(loadUserPort.existsById(authorId)).thenReturn(true);
+        when(loadUserPort.existsById(assigneeId)).thenReturn(true);
+        when(saveTaskPort.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Task createdTask = service.createTask(command);
+
+        InOrder inOrder = inOrder(loadUserPort, saveTaskPort);
+        inOrder.verify(loadUserPort).existsById(authorId);
+        inOrder.verify(loadUserPort).existsById(assigneeId);
+        inOrder.verify(saveTaskPort).save(any(Task.class));
+        verifyNoMoreInteractions(loadUserPort, saveTaskPort);
+
+        assertEquals(authorId, createdTask.getAuthorId());
+        assertEquals(assigneeId, createdTask.getAssigneeId());
+        assertEquals("Priority task", createdTask.getTitle());
+        assertEquals("explicit fields", createdTask.getDescription());
+        assertEquals(TaskPriority.CRITICAL, createdTask.getPriority());
+        assertEquals(TaskStatus.OPEN, createdTask.getStatus());
+        assertEquals(dueAt, createdTask.getDueAt());
+        assertEquals(NOW, createdTask.getCreatedAt());
+        assertEquals(NOW, createdTask.getUpdatedAt());
+    }
+
+    @Test
     void createTaskShouldValidateAuthorIdBeforeCallingPorts() {
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,
@@ -107,8 +143,9 @@ class CreateTaskServiceTest {
     }
 
     @Test
-    void createTaskShouldValidateTitleBeforeCallingPorts() {
+    void createTaskShouldRejectBlankTitleWithoutSavingTask() {
         UserId authorId = userId("11111111-1111-1111-1111-111111111111");
+        when(loadUserPort.existsById(authorId)).thenReturn(true);
 
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,
@@ -116,7 +153,9 @@ class CreateTaskServiceTest {
         );
 
         assertEquals("title must not be blank", exception.getMessage());
-        verifyNoInteractions(loadUserPort, saveTaskPort);
+        verify(loadUserPort).existsById(authorId);
+        verifyNoMoreInteractions(loadUserPort);
+        verifyNoInteractions(saveTaskPort);
     }
 
     @Test

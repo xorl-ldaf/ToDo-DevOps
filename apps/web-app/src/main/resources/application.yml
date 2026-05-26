@@ -11,7 +11,7 @@ spring:
   datasource:
     url: ${TODO_DB_URL:${DB_URL:jdbc:postgresql://${TODO_DB_HOST:localhost}:${TODO_DB_PORT:5432}/${TODO_DB_NAME:todo}}}
     username: ${TODO_DB_USERNAME:${DB_USERNAME:postgres}}
-    password: ${TODO_DB_PASSWORD:${DB_PASSWORD:postgres}}
+    password: ${TODO_DB_PASSWORD:${DB_PASSWORD:change-me-local-db-password}}
 
   jpa:
     hibernate:

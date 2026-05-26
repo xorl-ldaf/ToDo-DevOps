@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
@@ -89,6 +90,35 @@ class FlushReminderScheduledEventOutboxServiceTest {
     }
 
     @Test
+    void flushShouldReturnEmptyReportWhenNoMessagesAreClaimed() {
+        when(claimReminderScheduledEventOutboxPort.claimPending(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of());
+
+        ReminderScheduledEventOutboxReport report = service.flush(NOW);
+
+        assertEquals(ReminderScheduledEventOutboxReport.empty(), report);
+        verify(claimReminderScheduledEventOutboxPort).claimPending(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25);
+        verifyNoMoreInteractions(claimReminderScheduledEventOutboxPort);
+        verifyNoInteractions(publishReminderScheduledEventPort, finalizeReminderScheduledEventOutboxPort, outboxPublicationPolicy);
+    }
+
+    @Test
+    void flushShouldRejectNullNowBeforeCallingPorts() {
+        NullPointerException exception = assertThrows(
+                NullPointerException.class,
+                () -> service.flush(null)
+        );
+
+        assertEquals("now must not be null", exception.getMessage());
+        verifyNoInteractions(
+                claimReminderScheduledEventOutboxPort,
+                publishReminderScheduledEventPort,
+                finalizeReminderScheduledEventOutboxPort,
+                outboxPublicationPolicy
+        );
+    }
+
+    @Test
     void flushShouldKeepMessageRetryableWhenPublishFailsBeforeRetryBudgetIsExhausted() {
         ReminderScheduledEventOutboxMessage message = outboxMessage(1);
         PublicationException exception = new PublicationException("broker unavailable");
@@ -112,6 +142,28 @@ class FlushReminderScheduledEventOutboxServiceTest {
     }
 
     @Test
+    void flushShouldCountConcurrencyConflictWhenRetryableMessageIsNotRescheduled() {
+        ReminderScheduledEventOutboxMessage message = outboxMessage(1);
+        PublicationException exception = new PublicationException("broker unavailable");
+        when(claimReminderScheduledEventOutboxPort.claimPending(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of(message));
+        doThrow(exception).when(publishReminderScheduledEventPort).publish(message.event());
+        when(outboxPublicationPolicy.decideFailure(message, NOW, exception))
+                .thenReturn(PublicationFailureDecision.retry(NOW.plusSeconds(10), "PublicationException"));
+        when(finalizeReminderScheduledEventOutboxPort.reschedule(
+                message.eventId(),
+                PROCESSOR_ID,
+                NOW,
+                NOW.plusSeconds(10),
+                "PublicationException"
+        )).thenReturn(false);
+
+        ReminderScheduledEventOutboxReport report = service.flush(NOW);
+
+        assertEquals(new ReminderScheduledEventOutboxReport(1, 0, 0, 0, 1), report);
+    }
+
+    @Test
     void flushShouldMarkMessageFailedWhenRetryBudgetIsExhausted() {
         ReminderScheduledEventOutboxMessage message = outboxMessage(4);
         PublicationException exception = new PublicationException("broker unavailable");
@@ -131,6 +183,27 @@ class FlushReminderScheduledEventOutboxServiceTest {
 
         verify(outboxPublicationPolicy).decideFailure(message, NOW, exception);
         assertEquals(new ReminderScheduledEventOutboxReport(1, 0, 0, 1, 0), report);
+    }
+
+    @Test
+    void flushShouldCountConcurrencyConflictWhenFailedMessageIsNotFinalized() {
+        ReminderScheduledEventOutboxMessage message = outboxMessage(4);
+        PublicationException exception = new PublicationException("broker unavailable");
+        when(claimReminderScheduledEventOutboxPort.claimPending(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of(message));
+        doThrow(exception).when(publishReminderScheduledEventPort).publish(message.event());
+        when(outboxPublicationPolicy.decideFailure(message, NOW, exception))
+                .thenReturn(PublicationFailureDecision.failed("PublicationException"));
+        when(finalizeReminderScheduledEventOutboxPort.markFailed(
+                message.eventId(),
+                PROCESSOR_ID,
+                NOW,
+                "PublicationException"
+        )).thenReturn(false);
+
+        ReminderScheduledEventOutboxReport report = service.flush(NOW);
+
+        assertEquals(new ReminderScheduledEventOutboxReport(1, 0, 0, 0, 1), report);
     }
 
     @Test

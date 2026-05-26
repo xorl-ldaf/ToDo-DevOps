@@ -92,6 +92,34 @@ class AssignTaskServiceTest {
     }
 
     @Test
+    void assignTaskShouldKeepInProgressTaskInProgressWhenReassigned() {
+        TaskId taskId = taskId("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        UserId assigneeId = userId("33333333-3333-3333-3333-333333333333");
+        Task inProgressTask = new Task(
+                taskId,
+                userId("11111111-1111-1111-1111-111111111111"),
+                userId("22222222-2222-2222-2222-222222222222"),
+                "In progress task",
+                "reassign",
+                TaskStatus.IN_PROGRESS,
+                TaskPriority.HIGH,
+                null,
+                NOW.minusSeconds(300),
+                NOW.minusSeconds(120)
+        );
+        when(loadTaskPort.loadById(taskId)).thenReturn(Optional.of(inProgressTask));
+        when(loadUserPort.existsById(assigneeId)).thenReturn(true);
+        when(saveTaskPort.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Task assignedTask = service.assignTask(new AssignTaskCommand(taskId, assigneeId));
+
+        assertEquals(TaskStatus.IN_PROGRESS, assignedTask.getStatus());
+        assertEquals(assigneeId, assignedTask.getAssigneeId());
+        assertEquals(NOW, assignedTask.getUpdatedAt());
+        verify(saveTaskPort).save(any(Task.class));
+    }
+
+    @Test
     void assignTaskShouldValidateTaskIdBeforeCallingPorts() {
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,

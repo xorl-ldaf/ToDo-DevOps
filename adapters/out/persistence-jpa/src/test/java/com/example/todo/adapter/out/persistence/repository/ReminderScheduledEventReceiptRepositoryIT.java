@@ -38,6 +38,25 @@ class ReminderScheduledEventReceiptRepositoryIT extends AbstractReminderPersiste
         );
     }
 
+    @Test
+    void duplicateTopicPartitionOffsetShouldReturnFalseAndKeepOriginalReceipt() {
+        UUID taskId = UUID.randomUUID();
+        UUID reminderId = UUID.randomUUID();
+        UUID firstEventId = UUID.randomUUID();
+        UUID duplicateOffsetEventId = UUID.randomUUID();
+        seedTask(taskId);
+        adapter.save(scheduledReminder(reminderId, taskId, NOW));
+
+        boolean firstSave = receiptAdapter.save(receipt(firstEventId, reminderId, taskId, 42L));
+        boolean duplicateSave = receiptAdapter.save(receipt(duplicateOffsetEventId, reminderId, taskId, 42L));
+
+        assertThat(firstSave).isTrue();
+        assertThat(duplicateSave).isFalse();
+        assertThat(receiptRepository.count()).isEqualTo(1L);
+        assertThat(receiptRepository.findById(firstEventId)).isPresent();
+        assertThat(receiptRepository.findById(duplicateOffsetEventId)).isEmpty();
+    }
+
     private ReminderScheduledEventReceipt receipt(UUID eventId, UUID reminderId, UUID taskId, long offset) {
         return new ReminderScheduledEventReceipt(
                 eventId,

@@ -2,6 +2,8 @@ package com.example.todo.adapter.out.persistence.repository;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderJpaEntity;
 import com.example.todo.application.policy.ReminderLifecyclePolicy;
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.task.TaskId;
@@ -37,8 +39,8 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
 
         adapter.save(reminder);
 
-        List<Reminder> loaded = adapter.loadByTaskId(new TaskId(taskId));
-        assertThat(loaded).singleElement().satisfies(saved -> {
+        PageResult<Reminder> loaded = adapter.loadByTaskId(new TaskId(taskId), new PageQuery(0, 20, null), null);
+        assertThat(loaded.items()).singleElement().satisfies(saved -> {
             assertThat(saved.getId()).isEqualTo(reminder.getId());
             assertThat(saved.getTaskId()).isEqualTo(reminder.getTaskId());
             assertThat(saved.getRemindAt()).isEqualTo(reminder.getRemindAt());

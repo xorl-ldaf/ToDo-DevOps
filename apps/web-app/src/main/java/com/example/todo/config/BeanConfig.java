@@ -168,9 +168,13 @@ public class BeanConfig {
     CreateUserUseCase createUserUseCase(
             UserPersistenceAdapter userAdapter,
             UserFactory userFactory,
-            Clock clock
+            Clock clock,
+            PlatformTransactionManager transactionManager
     ) {
-        return new CreateUserService(userAdapter, userAdapter, clock, userFactory);
+        return new TransactionalCreateUserUseCase(
+                new CreateUserService(userAdapter, userAdapter, clock, userFactory),
+                transactionManager
+        );
     }
 
     @Bean
@@ -178,9 +182,13 @@ public class BeanConfig {
             UserReferencePolicy userReferencePolicy,
             TaskPersistenceAdapter taskAdapter,
             TaskFactory taskFactory,
-            Clock clock
+            Clock clock,
+            PlatformTransactionManager transactionManager
     ) {
-        return new CreateTaskService(userReferencePolicy, taskAdapter, clock, taskFactory);
+        return new TransactionalCreateTaskUseCase(
+                new CreateTaskService(userReferencePolicy, taskAdapter, clock, taskFactory),
+                transactionManager
+        );
     }
 
     @Bean
@@ -189,9 +197,13 @@ public class BeanConfig {
             UserReferencePolicy userReferencePolicy,
             TaskPersistenceAdapter taskAdapter,
             TaskStatePolicy taskStatePolicy,
-            Clock clock
+            Clock clock,
+            PlatformTransactionManager transactionManager
     ) {
-        return new AssignTaskService(taskReferencePolicy, userReferencePolicy, taskAdapter, clock, taskStatePolicy);
+        return new TransactionalAssignTaskUseCase(
+                new AssignTaskService(taskReferencePolicy, userReferencePolicy, taskAdapter, clock, taskStatePolicy),
+                transactionManager
+        );
     }
 
     @Bean

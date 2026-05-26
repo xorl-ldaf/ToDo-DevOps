@@ -16,6 +16,7 @@ The deploy baseline is application-focused. It does not provision the full data/
 - no in-cluster PostgreSQL deployment
 - no in-cluster Kafka deployment
 - no in-cluster Prometheus or Grafana deployment
+- no database migration job beyond the application startup Flyway behavior
 - no secret-manager integration
 - no automatic rollback controller
 - no GitOps controller
@@ -23,7 +24,7 @@ The deploy baseline is application-focused. It does not provision the full data/
 ## Kubernetes layout
 
 - `deploy/k8s/base/deployment.yaml`
-  Base `Deployment` with actuator probes, rolling update strategy, non-root runtime, read-only root filesystem, seccomp, resource defaults, pod anti-affinity preference, and topology spread.
+  Base `Deployment` with actuator probes, rolling update strategy, non-root runtime, read-only root filesystem, dropped capabilities, disabled service-account token mount, seccomp, resource defaults, pod anti-affinity preference, and topology spread.
 - `deploy/k8s/base/pod-disruption-budget.yaml`
   Baseline `PodDisruptionBudget` with `minAvailable: 1`.
 - `deploy/k8s/base/service.yaml`
@@ -61,6 +62,31 @@ Important variables carried by the overlays:
 - graceful shutdown
   `TODO_APP_SHUTDOWN_TIMEOUT`
 
+## Config and secrets
+
+This repository keeps configuration examples renderable, but it does not store real secrets.
+
+Local development:
+
+- Copy `.env.example` to `.env`.
+- Keep `.env` private and untracked.
+- Values in `.env.example` are placeholders such as `change-me-local-db-password`.
+- Docker Compose reads database, Kafka, Telegram, actuator, and Grafana settings from `.env`.
+- Telegram delivery stays disabled unless `TODO_TELEGRAM_ENABLED=true`, `TODO_REMINDER_DELIVERY_ENABLED=true`, and a real `TODO_TELEGRAM_BOT_TOKEN` are provided locally.
+
+CI:
+
+- GitHub Actions use repository-provided `secrets.GITHUB_TOKEN` for GHCR, signing, and attestation operations.
+- The manual deploy workflow expects `KUBE_CONFIG` as a GitHub Environment secret.
+- Do not commit cloud, cluster, Telegram, database, or registry credentials to this repository.
+
+Kubernetes:
+
+- `deploy/k8s/overlays/*/secret.env` files are examples used by Kustomize `secretGenerator`.
+- The generated Kubernetes `Secret` is not a production secret-management strategy; values are only base64-encoded in the rendered manifest.
+- For real production, replace this with an external secret manager integration such as cloud secret storage, Vault, or External Secrets Operator.
+- This repository intentionally does not add Vault or External Secrets Operator manifests; that is a future production step outside the current baseline.
+
 ## Runtime hardening baseline
 
 The workload baseline now assumes:
@@ -71,9 +97,20 @@ The workload baseline now assumes:
 - dropped Linux capabilities
 - `readOnlyRootFilesystem: true`
 - `seccompProfile: RuntimeDefault`
+- service-account token is not mounted into pods by default
 - writable `emptyDir` mounted at `/tmp`
 
 The image and manifests were updated together so these settings match the current container runtime behavior.
+
+## Image assumptions
+
+The Dockerfile intentionally stays simple:
+
+- multi-stage build with a Gradle builder image and an Eclipse Temurin JRE runtime image
+- explicit version tags for base images, with deployment promotion by immutable app-image digest
+- no distroless runtime, because keeping a small amount of shell tooling makes local incident/debug workflows easier
+- `curl` is present only for the OCI `HEALTHCHECK`
+- the application user cannot write to `/app`; writable runtime scratch space is `/tmp`
 
 ## Render manifests locally
 

@@ -7,11 +7,14 @@ resources:
   - namespace.yaml
   - ../../base
 
+# This overlay deploys only the todo-web-app workload.
+# PostgreSQL, Kafka, Prometheus, and Grafana remain external prerequisites.
 configMapGenerator:
   - name: todo-web-app-config
     envs:
       - configmap.env
 
+# Placeholder values are committed for rendering only; use real secrets through the target environment.
 secretGenerator:
   - name: todo-web-app-secret
     envs:

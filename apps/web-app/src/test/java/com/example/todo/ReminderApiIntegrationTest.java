@@ -99,14 +99,18 @@ class ReminderApiIntegrationTest {
 
         mockMvc.perform(get("/api/tasks/{taskId}/reminders", taskId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id", is(reminderId)))
-                .andExpect(jsonPath("$[0].taskId", is(taskId)))
-                .andExpect(jsonPath("$[0].remindAt", is(VALID_REMIND_AT.toString())))
-                .andExpect(jsonPath("$[0].status", is("SCHEDULED")))
-                .andExpect(jsonPath("$[0].createdAt", is(INITIAL_TIME.toString())))
-                .andExpect(jsonPath("$[0].updatedAt", is(INITIAL_TIME.toString())))
-                .andExpect(jsonPath("$[0].deliveredAt").doesNotExist());
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id", is(reminderId)))
+                .andExpect(jsonPath("$.items[0].taskId", is(taskId)))
+                .andExpect(jsonPath("$.items[0].remindAt", is(VALID_REMIND_AT.toString())))
+                .andExpect(jsonPath("$.items[0].status", is("SCHEDULED")))
+                .andExpect(jsonPath("$.items[0].createdAt", is(INITIAL_TIME.toString())))
+                .andExpect(jsonPath("$.items[0].updatedAt", is(INITIAL_TIME.toString())))
+                .andExpect(jsonPath("$.items[0].deliveredAt").doesNotExist())
+                .andExpect(jsonPath("$.page", is(0)))
+                .andExpect(jsonPath("$.size", is(20)))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.totalPages", is(1)));
     }
 
     @Test
@@ -119,13 +123,15 @@ class ReminderApiIntegrationTest {
 
         mockMvc.perform(get("/api/tasks/{taskId}/reminders", secondTaskId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.items", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements", is(0)));
 
         mockMvc.perform(get("/api/tasks/{taskId}/reminders", firstTaskId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].taskId", is(firstTaskId)))
-                .andExpect(jsonPath("$[1].taskId", is(firstTaskId)));
+                .andExpect(jsonPath("$.items", hasSize(2)))
+                .andExpect(jsonPath("$.items[0].taskId", is(firstTaskId)))
+                .andExpect(jsonPath("$.items[1].taskId", is(firstTaskId)))
+                .andExpect(jsonPath("$.totalElements", is(2)));
     }
 
     @Test
@@ -140,7 +146,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("task not found: " + missingTaskId)))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -153,7 +159,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.error", is("Not Found")))
                 .andExpect(jsonPath("$.message", is("task not found: " + missingTaskId)))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -171,7 +177,9 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
-                .andExpect(jsonPath("$.fieldErrors.remindAt", notNullValue()));
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("remindAt")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
     }
 
     @Test
@@ -186,7 +194,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("remindAt must not be in the past")))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -205,7 +213,7 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.message", is("request body is malformed or contains invalid enum/date value")))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     private String createTaskForReminder(String username, String displayName, String taskTitle) throws Exception {

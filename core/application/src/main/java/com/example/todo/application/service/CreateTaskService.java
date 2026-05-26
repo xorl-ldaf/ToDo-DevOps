@@ -56,7 +56,6 @@ public class CreateTaskService implements CreateTaskUseCase {
             throw new ApplicationValidationException("command must not be null");
         }
 
-        requireText(command.title(), "title");
         userReferencePolicy.requireExistingAuthor(command.authorId());
         userReferencePolicy.requireExistingAssigneeIfPresent(command.assigneeId());
 
@@ -71,12 +70,5 @@ public class CreateTaskService implements CreateTaskUseCase {
         );
 
         return saveTaskPort.save(task);
-    }
-
-    private static String requireText(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new ApplicationValidationException(fieldName + " must not be blank");
-        }
-        return value;
     }
 }

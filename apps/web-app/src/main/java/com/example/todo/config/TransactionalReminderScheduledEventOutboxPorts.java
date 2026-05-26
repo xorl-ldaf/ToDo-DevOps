@@ -4,6 +4,7 @@ import com.example.todo.application.outbox.ReminderScheduledEventOutboxMessage;
 import com.example.todo.application.port.out.ClaimReminderScheduledEventOutboxPort;
 import com.example.todo.application.port.out.FinalizeReminderScheduledEventOutboxPort;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
@@ -33,6 +34,7 @@ public final class TransactionalReminderScheduledEventOutboxPorts implements
         this.finalizeOutboxPort = Objects.requireNonNull(finalizeOutboxPort, "finalizeOutboxPort must not be null");
         Objects.requireNonNull(transactionManager, "transactionManager must not be null");
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override

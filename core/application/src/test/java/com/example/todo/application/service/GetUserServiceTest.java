@@ -50,6 +50,17 @@ class GetUserServiceTest {
     }
 
     @Test
+    void getUserShouldRejectNullUserId() {
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.getUser(null)
+        );
+
+        assertEquals("userId must not be null", exception.getMessage());
+        verifyNoMoreInteractions(loadUserDetailsPort);
+    }
+
+    @Test
     void getRequiredUserShouldReturnUserWhenFound() {
         UserId userId = new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
         User user = user(userId);

@@ -82,7 +82,7 @@ TODO_DB_HOST=localhost \
 TODO_DB_PORT=5432 \
 TODO_DB_NAME=todo \
 TODO_DB_USERNAME=postgres \
-TODO_DB_PASSWORD=postgres \
+TODO_DB_PASSWORD=change-me-local-db-password \
 ./gradlew :apps:web-app:bootRun
 ```
 

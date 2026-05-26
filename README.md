@@ -1,14 +1,17 @@
 # ToDo-DevOps
 
-ToDo-DevOps is a production-oriented portfolio project: a Java 21 / Spring Boot backend for users, tasks, and reminders, built to show backend engineering and DevOps judgment without pretending to be a complete production platform.
+[![CI](https://github.com/xorl-ldaf/ToDo-DevOps/actions/workflows/ci.yaml/badge.svg)](https://github.com/xorl-ldaf/ToDo-DevOps/actions/workflows/ci.yaml)
 
-The project is intentionally more than CRUD. It demonstrates PostgreSQL/Flyway persistence, hexagonal architecture, background reminder processing, an outbox-backed Kafka integration boundary, idempotent Kafka receipt persistence, Telegram delivery, Docker Compose, Kubernetes manifests, observability, and CI supply-chain awareness.
+ToDo-DevOps is a production-inspired portfolio project: a Java 21 / Spring Boot backend for users, tasks, and reminders. It is intentionally larger than a minimal ToDo app so the codebase can show architecture, reliability, testing, and DevOps trade-offs without pretending to be a complete production platform.
+
+The useful interview signal is not "this app needs Kubernetes and Kafka". It is that each extra piece has a visible boundary, a failure mode, and a place where I can explain why I would keep it, simplify it, or remove it for a different product size.
 
 ## What This Project Demonstrates
 
 - REST API design for users, tasks, task assignment, and task reminders.
 - PostgreSQL schema management through Flyway migrations.
 - Hexagonal architecture with domain/application logic separated from Spring, JPA, Kafka, Telegram, and web adapters.
+- ArchUnit tests that fail the build if onion boundaries are broken.
 - DB-backed reminder worker with `SCHEDULED`, `PROCESSING`, `DELIVERED`, and `FAILED` states.
 - Short transaction boundaries for claiming and finalizing background work.
 - Transactional outbox storage for `ReminderScheduledEventV1` when Kafka integration is enabled.
@@ -18,6 +21,51 @@ The project is intentionally more than CRUD. It demonstrates PostgreSQL/Flyway p
 - Local operational stack with Docker Compose, Prometheus, and Grafana.
 - Kubernetes deployment baseline with Kustomize overlays.
 - CI pipeline awareness: Gradle verification, Compose validation, image build/smoke test, Trivy scan, SBOM, signing, and attestations.
+
+## Why This Is Intentionally More Than CRUD
+
+A small ToDo API can be built as one Spring Boot module with controllers, services, and repositories. This repository goes further on purpose because CRUD alone does not show many production conversations:
+
+- Hexagonal modules make it easy to discuss dependency direction and testability without Spring context.
+- Flyway migrations and JPA adapters show how persistence behavior is validated against PostgreSQL rather than only mocked.
+- The reminder worker creates real state-transition and transaction-boundary questions.
+- The transactional outbox shows how to avoid publishing Kafka events directly inside the request transaction.
+- Kafka receipt persistence demonstrates at-least-once delivery and idempotency handling.
+- Telegram delivery creates a concrete external-call reliability problem with retryable and non-retryable failures.
+- Docker Compose, K8s manifests, observability, and CI show how the app is packaged and checked, while keeping platform claims limited.
+
+The point is to make trade-offs inspectable. The project is not claiming that every small ToDo product should start with this shape.
+
+## What I Would Simplify In A Real Small ToDo
+
+For a real small internal ToDo, I would cut aggressively:
+
+- Use one Spring Boot module until module boundaries start paying for themselves.
+- Remove Kafka and the outbox unless another service genuinely consumes task/reminder events.
+- Keep reminders as a database-backed scheduled worker if durable reminders matter; otherwise start with a simpler in-process scheduler.
+- Disable Telegram integration unless notification delivery is part of the product requirement.
+- Use Docker Compose for local/dev and delay Kubernetes until there is a real deployment target.
+- Keep CI to build/test/image/scan first; add signing, attestations, and SBOM verification when image promotion matters.
+- Replace Kustomize `secretGenerator` placeholders with a real secret manager only when deploying to a shared or production cluster.
+
+That simplification would reduce code and operational surface area. This portfolio version keeps the extra parts because they create useful engineering discussion.
+
+## Known Limitations And Interview Answers
+
+- No authentication/authorization.
+  For production, I would add auth before exposing user/task data. It is omitted here to keep focus on backend boundaries, reliability, and DevOps.
+- Not a full production platform.
+  The repo has useful baselines, but no managed database, no in-cluster Kafka, no centralized logs, no tracing, no autoscaling policy, and no secret-manager integration.
+- Kafka is not the reminder execution path.
+  PostgreSQL drives reminder delivery. Kafka is used as an integration/audit boundary for scheduled reminder events.
+- No exactly-once delivery claim.
+  PostgreSQL plus Kafka plus Telegram cannot provide end-to-end exactly-once behavior here. The design uses durable state, idempotent receipts, and retry policies instead.
+- Telegram delivery is at-least-once.
+  Telegram `sendMessage` does not give this path an idempotency key. A crash after Telegram accepts a message but before DB finalization can produce a duplicate user-visible message.
+- K8s manifests are an app workload baseline.
+  They define Deployment, Service, Ingress, PDB, security context, probes, resources, and overlays. They do not provision PostgreSQL, Kafka, Prometheus, Grafana, or real production secrets.
+- Supply-chain controls are demonstrative.
+  CI includes Trivy, SBOM, signing, and attestations for the image path. That is useful evidence, not a blanket security certification.
 
 ## Architecture Overview
 
@@ -82,7 +130,7 @@ Reminder execution is database-backed and independent from Kafka consumption:
 - Kubernetes manifests deploy the application workload only; they do not provision PostgreSQL, Kafka, Prometheus, or Grafana in-cluster.
 - Kafka does not provide exactly-once behavior across PostgreSQL, Kafka, and the consumer.
 - Telegram delivery is at-least-once. If the process crashes after Telegram accepts a message but before the reminder is finalized as `DELIVERED`, the reminder can be retried and the user can receive a duplicate message.
-- Secrets in local examples and Kubernetes overlay files are placeholders, not a secret-management solution.
+- Secrets in `.env.example` and Kubernetes overlay files are placeholders. Real production should use GitHub Actions secrets for CI/deploy inputs and an external secret manager for Kubernetes workloads.
 
 ## Quick Start
 
@@ -91,6 +139,8 @@ Create local configuration:
 ```bash
 cp .env.example .env
 ```
+
+Replace the `change-me-*` values in `.env` before using the stack outside a throwaway local environment. Keep real database passwords, Telegram bot tokens, and Grafana passwords out of Git.
 
 Start the full local stack:
 
@@ -184,23 +234,64 @@ curl --fail --silent "http://localhost:8080/api/tasks/${TASK_ID}/reminders"
 
 ## Tests and Verification
 
+Core verification commands:
+
+```bash
+./gradlew clean build
+docker compose config
+docker compose -f compose.yaml config -q
+docker build -t todo-devops:local .
+kubectl kustomize deploy/k8s/overlays/local
+```
+
 Run tests:
 
 ```bash
 ./gradlew test --no-daemon
 ```
 
+The persistence and Spring integration test suite uses Testcontainers PostgreSQL for Flyway/JPA behavior. Those tests run as part of `test` when Docker is available and are skipped by Testcontainers when Docker is not available.
+
 Build the application:
 
 ```bash
+./gradlew clean build
 ./gradlew clean build --no-daemon
 ```
+
+Build the container image:
+
+```bash
+docker build -t todo-devops:local .
+```
+
+Image assumptions:
+
+- The image is a simple multi-stage build: Gradle builds the Spring Boot jar, then a JRE runtime image runs it.
+- Base images use explicit version tags instead of digest pins so local rebuilds can pick up upstream security refreshes. Published deployment artifacts should still be promoted by immutable app-image digest.
+- The runtime process runs as `10001:10001`.
+- `/app` is read-only to the application user; `JAVA_TOOL_OPTIONS` and `HOME` point runtime scratch behavior at `/tmp`.
+- `curl` is installed only for the image `HEALTHCHECK` against the actuator readiness endpoint.
+- The app container expects PostgreSQL configuration through environment variables such as `TODO_DB_HOST`, `TODO_DB_PORT`, `TODO_DB_NAME`, `TODO_DB_USERNAME`, and `TODO_DB_PASSWORD`. Use Compose for the full local stack.
 
 Validate Compose files:
 
 ```bash
 docker compose -f compose.yaml config -q
 docker compose -f compose.smoke.yaml config -q
+```
+
+Run the local equivalent of the core CI checks:
+
+```bash
+./gradlew clean build --no-daemon
+docker compose -f compose.yaml config -q
+docker compose -f compose.smoke.yaml config -q
+docker build -t todo-devops:local .
+APP_IMAGE=todo-devops:local docker compose -f compose.smoke.yaml up -d --wait --wait-timeout 120
+curl --fail --retry 20 --retry-delay 3 http://localhost:18080/actuator/health/readiness
+curl --fail http://localhost:18080/api/users
+docker compose -f compose.smoke.yaml down -v
 ```
 
 Render Kubernetes overlays:
@@ -217,9 +308,11 @@ These commands match the local files and CI workflow. Commands that require Dock
 - Spring Boot actuator health/readiness/liveness and Prometheus metrics.
 - Custom metrics for reminder delivery, Telegram attempts, Kafka outbox scans/results, Kafka publish/consume behavior, and receipt persistence.
 - Local Prometheus and Grafana provisioning under `observability/`.
+- Incident-oriented metric guide, PromQL examples, and alert examples in [docs/observability.md](docs/observability.md).
 - Docker image with non-root runtime user and `/tmp` as the writable path.
 - Kubernetes manifests with probes, resource settings, security context, service, ingress, PDB, and local/prod overlays.
 - CI pipeline validates Compose files, runs Gradle build/tests, builds and smoke-tests the image, scans with Trivy, generates an SBOM, signs the image, and creates/verifies attestations.
+- Config/secrets story is intentionally simple: local `.env`, GitHub Actions secrets for CI/deploy, and documented external secret manager recommendation for real Kubernetes production.
 
 ## Documentation Map
 

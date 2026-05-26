@@ -53,6 +53,17 @@ class GetTaskServiceTest {
     }
 
     @Test
+    void getTaskShouldRejectNullTaskId() {
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.getTask(null)
+        );
+
+        assertEquals("taskId must not be null", exception.getMessage());
+        verifyNoMoreInteractions(loadTaskPort);
+    }
+
+    @Test
     void getRequiredTaskShouldReturnTaskWhenFound() {
         TaskId taskId = new TaskId(UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         Task task = task(taskId);

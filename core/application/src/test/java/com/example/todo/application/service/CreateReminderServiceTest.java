@@ -106,6 +106,37 @@ class CreateReminderServiceTest {
     }
 
     @Test
+    void createReminderShouldAllowReminderAtCurrentInstant() {
+        TaskId taskId = taskId("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        when(loadTaskPort.loadById(taskId)).thenReturn(Optional.of(task(taskId)));
+        when(saveReminderPort.save(any(Reminder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Reminder createdReminder = service.createReminder(new CreateReminderCommand(taskId, NOW));
+
+        assertEquals(NOW, createdReminder.getRemindAt());
+        assertEquals(NOW, createdReminder.getNextAttemptAt());
+        verify(storeReminderScheduledEventPort).store(any(ReminderScheduledEventV1.class));
+    }
+
+    @Test
+    void createReminderShouldNotStoreOutboxEventWhenSavingReminderFails() {
+        TaskId taskId = taskId("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        RuntimeException saveFailure = new RuntimeException("db unavailable");
+        when(loadTaskPort.loadById(taskId)).thenReturn(Optional.of(task(taskId)));
+        when(saveReminderPort.save(any(Reminder.class))).thenThrow(saveFailure);
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> service.createReminder(new CreateReminderCommand(taskId, NOW.plusSeconds(60)))
+        );
+
+        assertEquals(saveFailure, exception);
+        verify(loadTaskPort).loadById(taskId);
+        verify(saveReminderPort).save(any(Reminder.class));
+        verifyNoInteractions(storeReminderScheduledEventPort);
+    }
+
+    @Test
     void createReminderShouldValidateTaskIdBeforeCallingPorts() {
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,
@@ -155,8 +186,9 @@ class CreateReminderServiceTest {
     }
 
     @Test
-    void createReminderShouldRejectPastRemindAtBeforeCallingPorts() {
+    void createReminderShouldRejectPastRemindAtWithoutSavingReminder() {
         TaskId taskId = taskId("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        when(loadTaskPort.loadById(taskId)).thenReturn(Optional.of(task(taskId)));
 
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,
@@ -164,7 +196,9 @@ class CreateReminderServiceTest {
         );
 
         assertEquals("remindAt must not be in the past", exception.getMessage());
-        verifyNoInteractions(loadTaskPort, saveReminderPort, storeReminderScheduledEventPort);
+        verify(loadTaskPort).loadById(taskId);
+        verifyNoMoreInteractions(loadTaskPort);
+        verifyNoInteractions(saveReminderPort, storeReminderScheduledEventPort);
     }
 
     private Task task(TaskId taskId) {

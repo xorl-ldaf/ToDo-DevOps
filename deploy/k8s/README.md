@@ -2,6 +2,8 @@
 
 This directory contains the tracked Kubernetes baseline for `todo-web-app`.
 
+The overlay `secret.env` files are renderable examples only. They contain `change-me-*` placeholders so Kustomize can generate a `Secret`, but real cluster credentials should come from the target environment or a production secret manager integration.
+
 Structure:
 
 - `base/`

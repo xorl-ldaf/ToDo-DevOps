@@ -73,10 +73,10 @@ public class CreateReminderService implements CreateReminderUseCase {
         if (command.remindAt() == null) {
             throw new ApplicationValidationException("remindAt must not be null");
         }
+        taskReferencePolicy.requireTaskExists(taskId);
 
         Instant now = clock.instant();
         Reminder reminder = reminderFactory.createScheduled(taskId, command.remindAt(), now);
-        taskReferencePolicy.requireTaskExists(taskId);
 
         Reminder savedReminder = saveReminderPort.save(reminder);
         storeReminderScheduledEventPort.store(new ReminderScheduledEventV1(

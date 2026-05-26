@@ -6,6 +6,8 @@ import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.CreateReminderUseCase;
 import com.example.todo.application.port.in.ListTaskRemindersUseCase;
 import com.example.todo.application.factory.ReminderFactory;
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.task.TaskId;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,10 +21,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -60,9 +64,27 @@ class ReminderControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
+                .andExpect(jsonPath("$.message", is("validation failed")))
                 .andExpect(jsonPath("$.path", is("/api/tasks/" + TASK_UUID + "/reminders")))
-                .andExpect(jsonPath("$.fieldErrors.remindAt", notNullValue()));
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("remindAt")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
+        verifyNoInteractions(createReminderUseCase);
+    }
+
+    @Test
+    void createReminderShouldReturnBadRequestForInvalidRemindAtFormat() throws Exception {
+        mockMvc.perform(post("/api/tasks/{taskId}/reminders", TASK_UUID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "remindAt": "not-an-instant"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("request body is malformed or contains invalid enum/date value")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+        verifyNoInteractions(createReminderUseCase);
     }
 
     @Test
@@ -79,9 +101,9 @@ class ReminderControllerValidationTest {
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status", is(404)))
-                .andExpect(jsonPath("$.errorCode", is("RESOURCE_NOT_FOUND")))
                 .andExpect(jsonPath("$.path", is("/api/tasks/" + TASK_UUID + "/reminders")))
-                .andExpect(jsonPath("$.message", is("task not found: " + TASK_UUID)));
+                .andExpect(jsonPath("$.message", is("task not found: " + TASK_UUID)))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
@@ -98,23 +120,27 @@ class ReminderControllerValidationTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status", is(400)))
-                .andExpect(jsonPath("$.errorCode", is("APPLICATION_VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.message", is("remindAt must not be in the past")))
-                .andExpect(jsonPath("$.fieldErrors").isMap());
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 
     @Test
     void listRemindersShouldReturnResponseDtoWithoutPersistenceFields() throws Exception {
         TaskId taskId = new TaskId(TASK_UUID);
         Reminder reminder = new ReminderFactory().createScheduled(taskId, REMIND_AT, NOW);
-        when(listTaskRemindersUseCase.listTaskReminders(taskId)).thenReturn(List.of(reminder));
+        when(listTaskRemindersUseCase.listTaskReminders(taskId, new PageQuery(0, 20, null), null))
+                .thenReturn(new PageResult<>(List.of(reminder), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/tasks/{taskId}/reminders", TASK_UUID))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id", notNullValue()))
-                .andExpect(jsonPath("$[0].taskId", is(TASK_UUID.toString())))
-                .andExpect(jsonPath("$[0].remindAt", is(REMIND_AT.toString())))
-                .andExpect(jsonPath("$[0].version").doesNotExist())
-                .andExpect(jsonPath("$[0].hibernateLazyInitializer").doesNotExist());
+                .andExpect(jsonPath("$.items[0].id", notNullValue()))
+                .andExpect(jsonPath("$.items[0].taskId", is(TASK_UUID.toString())))
+                .andExpect(jsonPath("$.items[0].remindAt", is(REMIND_AT.toString())))
+                .andExpect(jsonPath("$.page", is(0)))
+                .andExpect(jsonPath("$.size", is(20)))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.totalPages", is(1)))
+                .andExpect(jsonPath("$.items[0].version").doesNotExist())
+                .andExpect(jsonPath("$.items[0].hibernateLazyInitializer").doesNotExist());
     }
 }

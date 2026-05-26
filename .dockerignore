@@ -5,6 +5,12 @@
 .vscode
 out
 **/build
+build
+docs
+deploy
+observability
+scripts
+*.md
 **/.DS_Store
 *.iml
 *.log

@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${TODO_DB_NAME:-todo}
       POSTGRES_USER: ${TODO_DB_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${TODO_DB_PASSWORD:-change-me-local-db-password}
 
     ports:
       - "${TODO_DB_HOST_PORT:-5432}:5432"
@@ -72,7 +72,7 @@ services:
       TODO_DB_PORT: 5432
       TODO_DB_NAME: ${TODO_DB_NAME:-todo}
       TODO_DB_USERNAME: ${TODO_DB_USERNAME:-postgres}
-      TODO_DB_PASSWORD: ${TODO_DB_PASSWORD:-postgres}
+      TODO_DB_PASSWORD: ${TODO_DB_PASSWORD:-change-me-local-db-password}
       TODO_KAFKA_ENABLED: ${TODO_KAFKA_ENABLED:-true}
       TODO_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1: ${TODO_KAFKA_TOPIC_REMINDER_SCHEDULED_V1:-todo.reminder.scheduled.v1}
@@ -120,7 +120,7 @@ services:
 
     environment:
       GF_SECURITY_ADMIN_USER: ${TODO_GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${TODO_GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${TODO_GRAFANA_ADMIN_PASSWORD:-change-me-local-grafana-password}
       GF_USERS_ALLOW_SIGN_UP: "false"
 
     volumes:

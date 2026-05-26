@@ -1,15 +1,20 @@
 package com.example.todo.adapter.in.web.dto;
 
 import java.time.Instant;
-import java.util.Map;
+import java.util.List;
 
 public record ApiError(
         Instant timestamp,
         int status,
         String error,
-        ApiErrorCode errorCode,
         String message,
         String path,
-        Map<String, String> fieldErrors
+        List<ValidationError> validationErrors
 ) {
+    public ApiError {
+        validationErrors = List.copyOf(validationErrors);
+    }
+
+    public record ValidationError(String field, String message) {
+    }
 }

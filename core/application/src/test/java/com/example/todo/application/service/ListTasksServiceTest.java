@@ -1,6 +1,8 @@
 package com.example.todo.application.service;
 
 import com.example.todo.application.port.out.LoadAllTasksPort;
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.task.Task;
 import com.example.todo.domain.task.TaskId;
 import com.example.todo.domain.task.TaskPriority;
@@ -36,14 +38,16 @@ class ListTasksServiceTest {
 
     @Test
     void listTasksShouldDelegateToLoadPort() {
+        PageQuery pageQuery = new PageQuery(1, 10, "createdAt,desc");
         Task firstTask = task("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "First");
         Task secondTask = task("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "Second");
-        when(loadAllTasksPort.loadAll()).thenReturn(List.of(firstTask, secondTask));
+        PageResult<Task> page = new PageResult<>(List.of(firstTask, secondTask), 1, 10, 25, 3);
+        when(loadAllTasksPort.load(pageQuery, TaskStatus.OPEN, TaskPriority.HIGH)).thenReturn(page);
 
-        List<Task> result = service.listTasks();
+        PageResult<Task> result = service.listTasks(pageQuery, TaskStatus.OPEN, TaskPriority.HIGH);
 
-        assertEquals(List.of(firstTask, secondTask), result);
-        verify(loadAllTasksPort).loadAll();
+        assertEquals(page, result);
+        verify(loadAllTasksPort).load(pageQuery, TaskStatus.OPEN, TaskPriority.HIGH);
         verifyNoMoreInteractions(loadAllTasksPort);
     }
 

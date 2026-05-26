@@ -6,8 +6,9 @@ import com.example.todo.application.port.in.CreateUserUseCase;
 import com.example.todo.application.port.in.GetUserUseCase;
 import com.example.todo.application.port.in.ListUsersUseCase;
 import com.example.todo.application.factory.UserFactory;
+import com.example.todo.application.query.PageQuery;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.user.UserId;
-import com.example.todo.domain.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -19,9 +20,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -68,25 +71,73 @@ class UserControllerValidationTest {
                 .andExpect(jsonPath("$.timestamp", notNullValue()))
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
-                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
                 .andExpect(jsonPath("$.path", is("/api/users")))
-                .andExpect(jsonPath("$.fieldErrors.username", notNullValue()));
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("username")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
+        verifyNoInteractions(createUserUseCase);
+    }
+
+    @Test
+    void createUserShouldReturnFieldErrorForMissingDisplayName() throws Exception {
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "alice"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("validation failed")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("displayName")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
+        verifyNoInteractions(createUserUseCase);
+    }
+
+    @Test
+    void createUserShouldReturnFieldErrorForTooLongUsername() throws Exception {
+        String username = "a".repeat(65);
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "%s",
+                                  "displayName": "Alice"
+                                }
+                                """.formatted(username)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("validation failed")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("username")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
+        verifyNoInteractions(createUserUseCase);
     }
 
     @Test
     void listUsersShouldReturnResponseDtoWithoutPersistenceFields() throws Exception {
-        when(listUsersUseCase.listUsers()).thenReturn(List.of(
-                new UserFactory().create("alice", "Alice", null, NOW)
-        ));
+        when(listUsersUseCase.listUsers(new PageQuery(0, 20, null)))
+                .thenReturn(new PageResult<>(
+                        List.of(new UserFactory().create("alice", "Alice", null, NOW)),
+                        0,
+                        20,
+                        1,
+                        1
+                ));
 
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id", notNullValue()))
-                .andExpect(jsonPath("$[0].username", is("alice")))
-                .andExpect(jsonPath("$[0].displayName", is("Alice")))
-                .andExpect(jsonPath("$[0].version").doesNotExist())
-                .andExpect(jsonPath("$[0].hibernateLazyInitializer").doesNotExist());
+                .andExpect(jsonPath("$.items[0].id", notNullValue()))
+                .andExpect(jsonPath("$.items[0].username", is("alice")))
+                .andExpect(jsonPath("$.items[0].displayName", is("Alice")))
+                .andExpect(jsonPath("$.page", is(0)))
+                .andExpect(jsonPath("$.size", is(20)))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.totalPages", is(1)))
+                .andExpect(jsonPath("$.items[0].version").doesNotExist())
+                .andExpect(jsonPath("$.items[0].hibernateLazyInitializer").doesNotExist());
     }
 
     @Test
@@ -101,8 +152,11 @@ class UserControllerValidationTest {
                                 }
                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
-                .andExpect(jsonPath("$.fieldErrors.telegramChatId", notNullValue()));
+                .andExpect(jsonPath("$.message", is("validation failed")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("telegramChatId")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
+        verifyNoInteractions(createUserUseCase);
     }
 
     @Test
@@ -113,8 +167,8 @@ class UserControllerValidationTest {
         mockMvc.perform(get("/api/users/{userId}", USER_UUID))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status", is(404)))
-                .andExpect(jsonPath("$.errorCode", is("RESOURCE_NOT_FOUND")))
                 .andExpect(jsonPath("$.path", is("/api/users/" + USER_UUID)))
-                .andExpect(jsonPath("$.message", is("user not found: " + USER_UUID)));
+                .andExpect(jsonPath("$.message", is("user not found: " + USER_UUID)))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
     }
 }
