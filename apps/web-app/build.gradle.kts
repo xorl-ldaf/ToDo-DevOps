@@ -51,4 +51,17 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    exclude("**/*IntegrationTest.class", "**/*IT.class")
+}
+
+val integrationTest by tasks.registering(Test::class) {
+    description = "Runs Docker/Testcontainers-backed integration tests."
+    group = "verification"
+
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    shouldRunAfter(tasks.test)
+
+    include("**/*IntegrationTest.class", "**/*IT.class")
+    useJUnitPlatform()
 }

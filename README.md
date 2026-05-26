@@ -250,7 +250,15 @@ Run tests:
 ./gradlew test --no-daemon
 ```
 
-The persistence and Spring integration test suite uses Testcontainers PostgreSQL for Flyway/JPA behavior. Those tests run as part of `test` when Docker is available and are skipped by Testcontainers when Docker is not available.
+`test` is the unit/lightweight test task used by the normal build. It does not require production secrets or Docker.
+
+Run Docker-backed integration tests:
+
+```bash
+./gradlew integrationTest --no-daemon --stacktrace
+```
+
+The integration suite uses Testcontainers for PostgreSQL/Kafka/Flyway/JPA behavior. It is separated from the ordinary unit build so `./gradlew clean build` stays deterministic without Docker or runtime secrets. If Docker is unavailable, Testcontainers-backed tests are skipped by their JUnit extension.
 
 Build the application:
 
@@ -285,6 +293,7 @@ Run the local equivalent of the core CI checks:
 
 ```bash
 ./gradlew clean build --no-daemon
+./gradlew integrationTest --no-daemon --stacktrace
 docker compose -f compose.yaml config -q
 docker compose -f compose.smoke.yaml config -q
 docker build -t todo-devops:local .
@@ -302,6 +311,12 @@ kubectl kustomize deploy/k8s/overlays/prod
 ```
 
 These commands match the local files and CI workflow. Commands that require Docker, Kubernetes, or Testcontainers need those tools available locally.
+
+Runtime-only configuration:
+
+- `TODO_DB_*`, `TODO_KAFKA_*`, `TODO_TELEGRAM_*`, `TODO_GRAFANA_*`, and actuator exposure overrides are read by local Compose, smoke tests, Kubernetes overlays, or the running app.
+- Normal `./gradlew clean build` and `./gradlew test` do not require real database passwords, Telegram tokens, Grafana passwords, or Kubernetes secrets.
+- Testcontainers integration tests provide their own temporary PostgreSQL/Kafka connection settings through test code.
 
 ## Observability and DevOps
 

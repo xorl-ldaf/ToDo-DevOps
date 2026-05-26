@@ -42,7 +42,7 @@ jobs:
         run: docker compose -f compose.smoke.yaml config -q
 
   gradle-build-test:
-    name: Gradle build and test
+    name: Gradle unit build and test
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -64,8 +64,25 @@ jobs:
       - name: Make Gradle Wrapper executable
         run: chmod +x ./gradlew
 
+      - name: Print Java and Gradle versions
+        run: |
+          java -version
+          ./gradlew --version --no-daemon
+
       - name: Build project with Gradle
-        run: ./gradlew clean build --no-daemon
+        run: ./gradlew clean build --no-daemon --stacktrace
+
+      - name: Upload Gradle test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-unit-test-reports
+          path: |
+            **/build/reports/tests/**
+            **/build/test-results/**
+            build/reports/problems/**
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload application artifact
         uses: actions/upload-artifact@v4
@@ -74,6 +91,51 @@ jobs:
           path: apps/web-app/build/libs/*.jar
           if-no-files-found: error
 
+  integration-tests:
+    name: Docker-backed integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: gradle-build-test
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle dependency cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle Wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Print runtime versions
+        run: |
+          java -version
+          ./gradlew --version --no-daemon
+          docker version
+
+      - name: Run Testcontainers integration tests
+        run: ./gradlew integrationTest --no-daemon --stacktrace
+
+      - name: Upload integration test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-integration-test-reports
+          path: |
+            **/build/reports/tests/**
+            **/build/test-results/**
+            build/reports/problems/**
+          if-no-files-found: ignore
+          retention-days: 7
+
   docker-image:
     name: Build Docker image
     runs-on: ubuntu-latest
@@ -81,6 +143,7 @@ jobs:
     needs:
       - compose-config
       - gradle-build-test
+      - integration-tests
     permissions:
       contents: read
       packages: write
