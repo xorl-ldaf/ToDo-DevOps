@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface GetTaskUseCase {
     Optional<Task> getTask(TaskId taskId);
+
+    Task getRequiredTask(TaskId taskId);
 }

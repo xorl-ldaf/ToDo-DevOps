@@ -1,6 +1,7 @@
 package com.example.todo.adapter.out.persistence.repository;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderJpaEntity;
+import com.example.todo.application.policy.ReminderLifecyclePolicy;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.task.TaskId;
@@ -19,6 +20,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT {
+    private final ReminderLifecyclePolicy reminderLifecyclePolicy = new ReminderLifecyclePolicy();
 
     @Test
     void saveAndLoadReminderShouldPreserveAllFields() {
@@ -61,7 +63,7 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
         adapter.save(scheduledReminder(dueReminderId, taskId, NOW.minusSeconds(1)));
         adapter.save(scheduledReminder(futureReminderId, taskId, NOW.plusSeconds(60)));
 
-        List<Reminder> claimed = adapter.claimDueReminders(NOW, "worker-1", Duration.ofSeconds(30), 10);
+        List<Reminder> claimed = claimDueReminders("worker-1", 10);
 
         assertThat(claimed).extracting(reminder -> reminder.getId().value()).containsExactly(dueReminderId);
         assertThat(claimed).singleElement().satisfies(reminder -> {
@@ -69,7 +71,7 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
             assertThat(reminder.getProcessingOwner()).isEqualTo("worker-1");
             assertThat(reminder.getProcessingStartedAt()).isEqualTo(NOW);
         });
-        assertThat(requireReminder(futureReminderId).getStatus()).isEqualTo(ReminderStatus.SCHEDULED);
+        assertThat(requireReminder(futureReminderId).getStatus()).isEqualTo(ReminderStatus.SCHEDULED.name());
     }
 
     @Test
@@ -78,7 +80,7 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
         seedTask(taskId);
         adapter.save(scheduledReminder(UUID.randomUUID(), taskId, NOW.plusSeconds(60)));
 
-        List<Reminder> claimed = adapter.claimDueReminders(NOW, "worker-1", Duration.ofSeconds(30), 10);
+        List<Reminder> claimed = claimDueReminders("worker-1", 10);
 
         assertThat(claimed).isEmpty();
     }
@@ -114,11 +116,11 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
         seedTask(taskId);
         adapter.save(processingReminder(reminderId, taskId, "old-worker", NOW.minusSeconds(120), 1));
 
-        List<Reminder> claimed = adapter.claimDueReminders(NOW, "new-worker", Duration.ofSeconds(30), 10);
+        List<Reminder> claimed = claimDueReminders("new-worker", 10);
 
         assertThat(claimed).extracting(reminder -> reminder.getId().value()).containsExactly(reminderId);
         ReminderJpaEntity stored = requireReminder(reminderId);
-        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.PROCESSING);
+        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.PROCESSING.name());
         assertThat(stored.getProcessingOwner()).isEqualTo("new-worker");
         assertThat(stored.getProcessingStartedAt()).isEqualTo(NOW);
     }
@@ -130,7 +132,7 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
         seedTask(taskId);
         adapter.save(processingReminder(reminderId, taskId, "old-worker", NOW.minusSeconds(5), 1));
 
-        List<Reminder> claimed = adapter.claimDueReminders(NOW, "new-worker", Duration.ofSeconds(30), 10);
+        List<Reminder> claimed = claimDueReminders("new-worker", 10);
 
         assertThat(claimed).isEmpty();
         assertThat(requireReminder(reminderId).getProcessingOwner()).isEqualTo("old-worker");
@@ -138,6 +140,15 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
 
     private List<Reminder> claimAfterBarrier(CyclicBarrier barrier, String workerId) throws Exception {
         barrier.await();
-        return adapter.claimDueReminders(NOW, workerId, Duration.ofSeconds(30), 1);
+        return claimDueReminders(workerId, 1);
+    }
+
+    private List<Reminder> claimDueReminders(String workerId, int limit) {
+        return adapter.claimDueReminders(
+                NOW,
+                Duration.ofSeconds(30),
+                limit,
+                reminder -> reminderLifecyclePolicy.markProcessing(reminder, workerId, NOW)
+        );
     }
 }

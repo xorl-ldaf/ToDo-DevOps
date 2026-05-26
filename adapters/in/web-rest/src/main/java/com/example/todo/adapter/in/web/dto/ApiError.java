@@ -7,6 +7,7 @@ public record ApiError(
         Instant timestamp,
         int status,
         String error,
+        ApiErrorCode errorCode,
         String message,
         String path,
         Map<String, String> fieldErrors

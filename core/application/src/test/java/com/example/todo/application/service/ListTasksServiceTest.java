@@ -48,7 +48,7 @@ class ListTasksServiceTest {
     }
 
     private Task task(String taskId, String title) {
-        return Task.restore(
+        return new Task(
                 new TaskId(UUID.fromString(taskId)),
                 new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111")),
                 new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111")),

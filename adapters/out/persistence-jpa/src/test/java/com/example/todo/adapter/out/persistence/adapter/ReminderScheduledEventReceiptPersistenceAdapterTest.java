@@ -1,6 +1,7 @@
 package com.example.todo.adapter.out.persistence.adapter;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderScheduledEventReceiptJpaEntity;
+import com.example.todo.adapter.out.persistence.exception.PersistenceAdapterException;
 import com.example.todo.adapter.out.persistence.repository.SpringDataReminderScheduledEventReceiptRepository;
 import com.example.todo.application.receipt.ReminderScheduledEventReceipt;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,13 +64,18 @@ class ReminderScheduledEventReceiptPersistenceAdapterTest {
     }
 
     @Test
-    void saveShouldRethrowNonDuplicateIntegrityViolation() throws SQLException {
+    void saveShouldWrapNonDuplicateIntegrityViolation() throws SQLException {
         doThrow(new DataIntegrityViolationException(
                 "foreign key violation",
                 new SQLException("foreign key violation", "23503")
         )).when(repository).save(any(ReminderScheduledEventReceiptJpaEntity.class));
 
-        assertThrows(DataIntegrityViolationException.class, () -> adapter.save(receipt()));
+        PersistenceAdapterException exception = assertThrows(
+                PersistenceAdapterException.class,
+                () -> adapter.save(receipt())
+        );
+
+        assertEquals("Save reminder scheduled event receipt failed", exception.getMessage());
     }
 
     @Test

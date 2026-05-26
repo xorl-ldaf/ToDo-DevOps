@@ -3,7 +3,6 @@ package com.example.todo.adapter.in.web.controller;
 import com.example.todo.adapter.in.web.dto.CreateUserRequest;
 import com.example.todo.adapter.in.web.dto.UserResponse;
 import com.example.todo.adapter.in.web.mapper.WebApiMapper;
-import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.CreateUserUseCase;
 import com.example.todo.application.port.in.GetUserUseCase;
 import com.example.todo.application.port.in.ListUsersUseCase;
@@ -53,8 +52,6 @@ public class UserController {
 
     @GetMapping("/{userId}")
     public UserResponse getUser(@PathVariable("userId") UUID userId) {
-        return getUserUseCase.getUser(new UserId(userId))
-                .map(WebApiMapper::toResponse)
-                .orElseThrow(() -> new ResourceNotFoundException("user not found: " + userId));
+        return WebApiMapper.toResponse(getUserUseCase.getRequiredUser(new UserId(userId)));
     }
 }

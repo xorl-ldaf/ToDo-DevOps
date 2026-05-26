@@ -44,12 +44,12 @@ public class TaskJpaEntity {
     @Column(nullable = false)
     private String description;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
+    @Enumerated(EnumType.STRING)
     private TaskStatus status;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
+    @Enumerated(EnumType.STRING)
     private TaskPriority priority;
 
     @Column(name = "due_at")

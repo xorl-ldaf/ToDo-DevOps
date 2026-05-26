@@ -1,11 +1,11 @@
 package com.example.todo.adapter.in.web.advice;
 
 import com.example.todo.adapter.in.web.dto.ApiError;
+import com.example.todo.adapter.in.web.dto.ApiErrorCode;
 import com.example.todo.application.exception.AlreadyExistsException;
 import com.example.todo.application.exception.ApplicationValidationException;
+import com.example.todo.application.exception.InvalidStateTransitionException;
 import com.example.todo.application.exception.ResourceNotFoundException;
-import com.example.todo.domain.shared.exception.DomainValidationException;
-import com.example.todo.domain.shared.exception.InvalidStateTransitionException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -29,28 +29,33 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
-        return build(HttpStatus.NOT_FOUND, ex.getMessage(), request, Map.of());
+        return build(HttpStatus.NOT_FOUND, ApiErrorCode.RESOURCE_NOT_FOUND, ex.getMessage(), request, Map.of());
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiError> handleNoResourceFound(NoResourceFoundException ex, HttpServletRequest request) {
-        return build(HttpStatus.NOT_FOUND, "resource not found", request, Map.of());
+        return build(HttpStatus.NOT_FOUND, ApiErrorCode.RESOURCE_NOT_FOUND, "resource not found", request, Map.of());
     }
 
-    @ExceptionHandler({
-            ApplicationValidationException.class,
-            DomainValidationException.class
-    })
-    public ResponseEntity<ApiError> handleBadRequest(RuntimeException ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, Map.of());
+    @ExceptionHandler(ApplicationValidationException.class)
+    public ResponseEntity<ApiError> handleBadRequest(ApplicationValidationException ex, HttpServletRequest request) {
+        return build(
+                HttpStatus.BAD_REQUEST,
+                ApiErrorCode.APPLICATION_VALIDATION_FAILED,
+                ex.getMessage(),
+                request,
+                Map.of()
+        );
     }
 
-    @ExceptionHandler({
-            InvalidStateTransitionException.class,
-            AlreadyExistsException.class
-    })
-    public ResponseEntity<ApiError> handleConflict(RuntimeException ex, HttpServletRequest request) {
-        return build(HttpStatus.CONFLICT, ex.getMessage(), request, Map.of());
+    @ExceptionHandler(AlreadyExistsException.class)
+    public ResponseEntity<ApiError> handleAlreadyExists(AlreadyExistsException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, ApiErrorCode.ALREADY_EXISTS, ex.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(InvalidStateTransitionException.class)
+    public ResponseEntity<ApiError> handleInvalidState(InvalidStateTransitionException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, ApiErrorCode.INVALID_STATE, ex.getMessage(), request, Map.of());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -61,7 +66,7 @@ public class GlobalExceptionHandler {
                 errors.putIfAbsent(error.getField(), error.getDefaultMessage())
         );
 
-        return build(HttpStatus.BAD_REQUEST, "validation failed", request, errors);
+        return build(HttpStatus.BAD_REQUEST, ApiErrorCode.VALIDATION_FAILED, "validation failed", request, errors);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -74,7 +79,7 @@ public class GlobalExceptionHandler {
                 errors.putIfAbsent(violation.getPropertyPath().toString(), violation.getMessage())
         );
 
-        return build(HttpStatus.BAD_REQUEST, "validation failed", request, errors);
+        return build(HttpStatus.BAD_REQUEST, ApiErrorCode.VALIDATION_FAILED, "validation failed", request, errors);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
@@ -83,7 +88,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         String message = "invalid value for parameter: " + ex.getName();
-        return build(HttpStatus.BAD_REQUEST, message, request, Map.of());
+        return build(HttpStatus.BAD_REQUEST, ApiErrorCode.VALIDATION_FAILED, message, request, Map.of());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -93,6 +98,7 @@ public class GlobalExceptionHandler {
     ) {
         return build(
                 HttpStatus.BAD_REQUEST,
+                ApiErrorCode.VALIDATION_FAILED,
                 "request body is malformed or contains invalid enum/date value",
                 request,
                 Map.of()
@@ -104,6 +110,7 @@ public class GlobalExceptionHandler {
         log.error("Unexpected error while handling request", ex);
         return build(
                 HttpStatus.INTERNAL_SERVER_ERROR,
+                ApiErrorCode.INTERNAL_ERROR,
                 "unexpected internal error",
                 request,
                 Map.of()
@@ -112,6 +119,7 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ApiError> build(
             HttpStatus status,
+            ApiErrorCode errorCode,
             String message,
             HttpServletRequest request,
             Map<String, String> fieldErrors
@@ -121,6 +129,7 @@ public class GlobalExceptionHandler {
                         Instant.now(),
                         status.value(),
                         status.getReasonPhrase(),
+                        errorCode,
                         message,
                         request.getRequestURI(),
                         fieldErrors

@@ -2,6 +2,8 @@ package com.example.todo.adapter.out.persistence.adapter;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderScheduledEventOutboxJpaEntity;
 import com.example.todo.adapter.out.persistence.entity.ReminderScheduledEventOutboxStatus;
+import com.example.todo.adapter.out.persistence.exception.PersistenceAdapterException;
+import com.example.todo.adapter.out.persistence.exception.PersistenceAdapterFailures;
 import com.example.todo.adapter.out.persistence.repository.SpringDataReminderScheduledEventOutboxRepository;
 import com.example.todo.application.event.ReminderScheduledEventV1;
 import com.example.todo.application.outbox.ReminderScheduledEventOutboxMessage;
@@ -10,7 +12,6 @@ import com.example.todo.application.port.out.FinalizeReminderScheduledEventOutbo
 import com.example.todo.application.port.out.StoreReminderScheduledEventPort;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,11 +52,10 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
         entity.setUpdatedAt(actualEvent.occurredAt());
         entity.setAvailableAt(actualEvent.occurredAt());
         entity.setDeliveryAttempts(0);
-        repository.save(entity);
+        PersistenceAdapterFailures.execute("Store reminder scheduled event outbox message", () -> repository.save(entity));
     }
 
     @Override
-    @Transactional
     public List<ReminderScheduledEventOutboxMessage> claimPending(
             Instant now,
             String processorId,
@@ -63,24 +63,27 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
             int limit
     ) {
         List<ReminderScheduledEventOutboxMessage> claimedMessages = new ArrayList<>();
-        for (ReminderScheduledEventOutboxJpaEntity entity : repository.findClaimableForPublishing(
-                now,
-                now.minus(processingTimeout),
-                limit
-        )) {
+        List<ReminderScheduledEventOutboxJpaEntity> claimableEntities = PersistenceAdapterFailures.execute(
+                "Claim reminder scheduled event outbox messages",
+                () -> repository.findClaimableForPublishing(
+                        now,
+                        now.minus(processingTimeout),
+                        limit
+                )
+        );
+        for (ReminderScheduledEventOutboxJpaEntity entity : claimableEntities) {
             entity.setStatus(ReminderScheduledEventOutboxStatus.PROCESSING);
             entity.setProcessingOwner(processorId);
             entity.setProcessingStartedAt(now);
             entity.setUpdatedAt(now);
             entity.setLastFailureReason(null);
-            repository.save(entity);
+            PersistenceAdapterFailures.execute("Save claimed reminder scheduled event outbox message", () -> repository.save(entity));
             claimedMessages.add(toMessage(entity));
         }
         return claimedMessages;
     }
 
     @Override
-    @Transactional
     public boolean markPublished(UUID eventId, String processorId, Instant publishedAt) {
         return withClaimedMessage(eventId, processorId, entity -> {
             entity.setStatus(ReminderScheduledEventOutboxStatus.PUBLISHED);
@@ -94,7 +97,6 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
     }
 
     @Override
-    @Transactional
     public boolean reschedule(
             UUID eventId,
             String processorId,
@@ -114,7 +116,6 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
     }
 
     @Override
-    @Transactional
     public boolean markFailed(UUID eventId, String processorId, Instant processedAt, String failureReason) {
         return withClaimedMessage(eventId, processorId, entity -> {
             entity.setStatus(ReminderScheduledEventOutboxStatus.FAILED);
@@ -127,17 +128,20 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
     }
 
     private boolean withClaimedMessage(UUID eventId, String processorId, Consumer<ReminderScheduledEventOutboxJpaEntity> action) {
-        return repository.findForUpdateByEventIdAndStatusAndProcessingOwner(
-                        eventId,
-                        "PROCESSING",
-                        processorId
-                )
-                .map(entity -> {
-                    action.accept(entity);
-                    repository.save(entity);
-                    return true;
-                })
-                .orElse(false);
+        return PersistenceAdapterFailures.execute(
+                "Finalize reminder scheduled event outbox message",
+                () -> repository.findForUpdateByEventIdAndStatusAndProcessingOwner(
+                                eventId,
+                                "PROCESSING",
+                                processorId
+                        )
+                        .map(entity -> {
+                            action.accept(entity);
+                            repository.save(entity);
+                            return true;
+                        })
+                        .orElse(false)
+        );
     }
 
     private ReminderScheduledEventOutboxMessage toMessage(ReminderScheduledEventOutboxJpaEntity entity) {
@@ -153,7 +157,7 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
         try {
             return objectMapper.writeValueAsString(event);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Failed to serialize reminder scheduled event outbox payload", exception);
+            throw new PersistenceAdapterException("Serialize reminder scheduled event outbox payload failed", exception);
         }
     }
 
@@ -161,7 +165,7 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
         try {
             return objectMapper.readValue(payload, ReminderScheduledEventV1.class);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Failed to deserialize reminder scheduled event outbox payload", exception);
+            throw new PersistenceAdapterException("Deserialize reminder scheduled event outbox payload failed", exception);
         }
     }
 }

@@ -22,9 +22,21 @@ import com.example.todo.application.port.in.ListTaskRemindersUseCase;
 import com.example.todo.application.port.in.ListTasksUseCase;
 import com.example.todo.application.port.in.ListUsersUseCase;
 import com.example.todo.application.port.in.ScanDueRemindersUseCase;
+import com.example.todo.application.port.out.ClaimDueRemindersPort;
+import com.example.todo.application.port.out.ClaimReminderScheduledEventOutboxPort;
 import com.example.todo.application.port.out.DeliverReminderNotificationPort;
+import com.example.todo.application.port.out.FinalizeReminderDeliveryPort;
+import com.example.todo.application.port.out.FinalizeReminderScheduledEventOutboxPort;
 import com.example.todo.application.port.out.PublishReminderScheduledEventPort;
 import com.example.todo.application.port.out.StoreReminderScheduledEventPort;
+import com.example.todo.application.factory.ReminderFactory;
+import com.example.todo.application.factory.TaskFactory;
+import com.example.todo.application.factory.UserFactory;
+import com.example.todo.application.policy.ReminderDeliveryPolicy;
+import com.example.todo.application.policy.ReminderLifecyclePolicy;
+import com.example.todo.application.policy.TaskReferencePolicy;
+import com.example.todo.application.policy.TaskStatePolicy;
+import com.example.todo.application.policy.UserReferencePolicy;
 import com.example.todo.application.service.AssignTaskService;
 import com.example.todo.application.service.CreateReminderService;
 import com.example.todo.application.service.CreateTaskService;
@@ -32,6 +44,7 @@ import com.example.todo.application.service.CreateUserService;
 import com.example.todo.application.service.FlushReminderScheduledEventOutboxService;
 import com.example.todo.application.service.GetTaskService;
 import com.example.todo.application.service.GetUserService;
+import com.example.todo.application.service.LinkTelegramChatService;
 import com.example.todo.application.service.ListTaskRemindersService;
 import com.example.todo.application.service.ListTasksService;
 import com.example.todo.application.service.ListUsersService;
@@ -41,6 +54,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.Clock;
@@ -65,10 +79,62 @@ public class BeanConfig {
     }
 
     @Bean
-    ReminderPersistenceAdapter reminderPersistenceAdapter(
-            SpringDataReminderRepository repository
-    ) {
+    ReminderPersistenceAdapter reminderPersistenceAdapter(SpringDataReminderRepository repository) {
         return new ReminderPersistenceAdapter(repository);
+    }
+
+    @Bean
+    @Primary
+    TransactionalReminderDeliveryPersistencePorts transactionalReminderDeliveryPersistencePorts(
+            ReminderPersistenceAdapter reminderAdapter,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new TransactionalReminderDeliveryPersistencePorts(reminderAdapter, reminderAdapter, transactionManager);
+    }
+
+    @Bean
+    ReminderFactory reminderFactory() {
+        return new ReminderFactory();
+    }
+
+    @Bean
+    TaskFactory taskFactory() {
+        return new TaskFactory();
+    }
+
+    @Bean
+    ReminderLifecyclePolicy reminderLifecyclePolicy() {
+        return new ReminderLifecyclePolicy();
+    }
+
+    @Bean
+    ReminderDeliveryPolicy reminderDeliveryPolicy() {
+        return new ReminderDeliveryPolicy();
+    }
+
+    @Bean
+    TaskStatePolicy taskStatePolicy() {
+        return new TaskStatePolicy();
+    }
+
+    @Bean
+    TaskReferencePolicy taskReferencePolicy(TaskPersistenceAdapter taskAdapter) {
+        return new TaskReferencePolicy(taskAdapter);
+    }
+
+    @Bean
+    UserReferencePolicy userReferencePolicy(UserPersistenceAdapter userAdapter) {
+        return new UserReferencePolicy(userAdapter);
+    }
+
+    @Bean
+    UserFactory userFactory() {
+        return new UserFactory();
+    }
+
+    @Bean
+    LinkTelegramChatService linkTelegramChatService() {
+        return new LinkTelegramChatService();
     }
 
     @Bean
@@ -78,6 +144,16 @@ public class BeanConfig {
             ObjectMapper objectMapper
     ) {
         return new ReminderScheduledEventOutboxPersistenceAdapter(repository, objectMapper);
+    }
+
+    @Bean
+    @Primary
+    @ConditionalOnProperty(prefix = "todo.kafka", name = "enabled", havingValue = "true")
+    TransactionalReminderScheduledEventOutboxPorts transactionalReminderScheduledEventOutboxPorts(
+            ReminderScheduledEventOutboxPersistenceAdapter outboxAdapter,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new TransactionalReminderScheduledEventOutboxPorts(outboxAdapter, outboxAdapter, transactionManager);
     }
 
     @Bean
@@ -91,48 +167,57 @@ public class BeanConfig {
     @Bean
     CreateUserUseCase createUserUseCase(
             UserPersistenceAdapter userAdapter,
+            UserFactory userFactory,
             Clock clock
     ) {
-        return new CreateUserService(userAdapter, userAdapter, clock);
+        return new CreateUserService(userAdapter, userAdapter, clock, userFactory);
     }
 
     @Bean
     CreateTaskUseCase createTaskUseCase(
-            UserPersistenceAdapter userAdapter,
+            UserReferencePolicy userReferencePolicy,
             TaskPersistenceAdapter taskAdapter,
+            TaskFactory taskFactory,
             Clock clock
     ) {
-        return new CreateTaskService(userAdapter, taskAdapter, clock);
+        return new CreateTaskService(userReferencePolicy, taskAdapter, clock, taskFactory);
     }
 
     @Bean
     AssignTaskUseCase assignTaskUseCase(
+            TaskReferencePolicy taskReferencePolicy,
+            UserReferencePolicy userReferencePolicy,
             TaskPersistenceAdapter taskAdapter,
-            UserPersistenceAdapter userAdapter,
+            TaskStatePolicy taskStatePolicy,
             Clock clock
     ) {
-        return new AssignTaskService(taskAdapter, userAdapter, taskAdapter, clock);
+        return new AssignTaskService(taskReferencePolicy, userReferencePolicy, taskAdapter, clock, taskStatePolicy);
     }
 
     @Bean
     ScanDueRemindersService scanDueRemindersService(
-            ReminderPersistenceAdapter reminderAdapter,
+            ClaimDueRemindersPort claimDueRemindersPort,
+            FinalizeReminderDeliveryPort finalizeReminderDeliveryPort,
             TaskPersistenceAdapter taskAdapter,
             UserPersistenceAdapter userAdapter,
             DeliverReminderNotificationPort deliverReminderNotificationPort,
-            TodoReminderDeliveryProperties reminderDeliveryProperties
+            ReminderDeliveryPolicy reminderDeliveryPolicy,
+            TodoReminderDeliveryProperties reminderDeliveryProperties,
+            ReminderLifecyclePolicy reminderLifecyclePolicy
     ) {
         return new ScanDueRemindersService(
-                reminderAdapter,
+                claimDueRemindersPort,
                 taskAdapter,
                 userAdapter,
                 deliverReminderNotificationPort,
-                reminderAdapter,
+                finalizeReminderDeliveryPort,
                 processorId("reminder-delivery"),
                 reminderDeliveryProperties.requireBatchSize(),
                 reminderDeliveryProperties.requireMaxAttempts(),
                 reminderDeliveryProperties.requireRetryBackoff(),
-                reminderDeliveryProperties.requireProcessingTimeout()
+                reminderDeliveryProperties.requireProcessingTimeout(),
+                reminderDeliveryPolicy,
+                reminderLifecyclePolicy
         );
     }
 
@@ -163,14 +248,21 @@ public class BeanConfig {
 
     @Bean
     CreateReminderUseCase createReminderUseCase(
-            TaskPersistenceAdapter taskAdapter,
             ReminderPersistenceAdapter reminderAdapter,
             StoreReminderScheduledEventPort storeReminderScheduledEventPort,
             PlatformTransactionManager transactionManager,
+            TaskReferencePolicy taskReferencePolicy,
+            ReminderFactory reminderFactory,
             Clock clock
     ) {
         return new TransactionalCreateReminderUseCase(
-                new CreateReminderService(taskAdapter, reminderAdapter, storeReminderScheduledEventPort, clock),
+                new CreateReminderService(
+                        taskReferencePolicy,
+                        reminderAdapter,
+                        storeReminderScheduledEventPort,
+                        clock,
+                        reminderFactory
+                ),
                 transactionManager
         );
     }
@@ -186,13 +278,14 @@ public class BeanConfig {
     @Bean
     @ConditionalOnProperty(prefix = "todo.kafka", name = "enabled", havingValue = "true")
     FlushReminderScheduledEventOutboxUseCase flushReminderScheduledEventOutboxUseCase(
-            ReminderScheduledEventOutboxPersistenceAdapter outboxAdapter,
+            ClaimReminderScheduledEventOutboxPort claimOutboxPort,
+            FinalizeReminderScheduledEventOutboxPort finalizeOutboxPort,
             PublishReminderScheduledEventPort publishReminderScheduledEventPort,
             TodoKafkaProperties kafkaProperties
     ) {
         return new FlushReminderScheduledEventOutboxService(
-                outboxAdapter,
-                outboxAdapter,
+                claimOutboxPort,
+                finalizeOutboxPort,
                 publishReminderScheduledEventPort,
                 processorId("kafka-outbox"),
                 kafkaProperties.getOutbox().getBatchSize(),

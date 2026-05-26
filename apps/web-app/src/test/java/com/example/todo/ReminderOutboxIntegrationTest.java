@@ -23,6 +23,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.context.WebApplicationContext;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -37,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 @SpringBootTest(classes = {WebApplication.class, ReminderOutboxIntegrationTest.TestConfig.class})
@@ -133,6 +135,7 @@ class ReminderOutboxIntegrationTest {
         ReminderScheduledEventOutboxReport report = flushReminderScheduledEventOutboxUseCase.flush(REMIND_AT);
 
         assertEquals(1, publishReminderScheduledEventPort.publishAttempts());
+        assertFalse(publishReminderScheduledEventPort.wasTransactionActiveDuringCall());
         assertEquals(1, report.retriedCount());
         Integer retriedOutboxCount = jdbcTemplate.queryForObject(
                 "select count(*) from reminder_scheduled_event_outbox where status = 'PENDING' and delivery_attempts = 1",
@@ -281,9 +284,11 @@ class ReminderOutboxIntegrationTest {
 
     static final class CountingFailingPublishReminderScheduledEventPort implements PublishReminderScheduledEventPort {
         private final AtomicInteger publishAttempts = new AtomicInteger();
+        private final AtomicBoolean transactionActiveDuringCall = new AtomicBoolean(false);
 
         @Override
         public void publish(ReminderScheduledEventV1 event) {
+            transactionActiveDuringCall.set(TransactionSynchronizationManager.isActualTransactionActive());
             publishAttempts.incrementAndGet();
             throw new IllegalStateException("simulated kafka publish failure");
         }
@@ -294,6 +299,11 @@ class ReminderOutboxIntegrationTest {
 
         private void reset() {
             publishAttempts.set(0);
+            transactionActiveDuringCall.set(false);
+        }
+
+        private boolean wasTransactionActiveDuringCall() {
+            return transactionActiveDuringCall.get();
         }
     }
 }

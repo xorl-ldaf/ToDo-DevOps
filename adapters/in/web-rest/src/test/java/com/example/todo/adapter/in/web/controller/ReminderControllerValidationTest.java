@@ -5,6 +5,7 @@ import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.CreateReminderUseCase;
 import com.example.todo.application.port.in.ListTaskRemindersUseCase;
+import com.example.todo.application.factory.ReminderFactory;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.task.TaskId;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,7 @@ class ReminderControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.path", is("/api/tasks/" + TASK_UUID + "/reminders")))
                 .andExpect(jsonPath("$.fieldErrors.remindAt", notNullValue()));
     }
@@ -77,6 +79,7 @@ class ReminderControllerValidationTest {
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.errorCode", is("RESOURCE_NOT_FOUND")))
                 .andExpect(jsonPath("$.path", is("/api/tasks/" + TASK_UUID + "/reminders")))
                 .andExpect(jsonPath("$.message", is("task not found: " + TASK_UUID)));
     }
@@ -95,6 +98,7 @@ class ReminderControllerValidationTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.errorCode", is("APPLICATION_VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.message", is("remindAt must not be in the past")))
                 .andExpect(jsonPath("$.fieldErrors").isMap());
     }
@@ -102,7 +106,7 @@ class ReminderControllerValidationTest {
     @Test
     void listRemindersShouldReturnResponseDtoWithoutPersistenceFields() throws Exception {
         TaskId taskId = new TaskId(TASK_UUID);
-        Reminder reminder = Reminder.schedule(taskId, REMIND_AT, NOW);
+        Reminder reminder = new ReminderFactory().createScheduled(taskId, REMIND_AT, NOW);
         when(listTaskRemindersUseCase.listTaskReminders(taskId)).thenReturn(List.of(reminder));
 
         mockMvc.perform(get("/api/tasks/{taskId}/reminders", TASK_UUID))

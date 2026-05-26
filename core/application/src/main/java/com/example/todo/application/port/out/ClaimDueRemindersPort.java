@@ -5,7 +5,13 @@ import com.example.todo.domain.reminder.Reminder;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 public interface ClaimDueRemindersPort {
-    List<Reminder> claimDueReminders(Instant now, String processorId, Duration processingTimeout, int limit);
+    List<Reminder> claimDueReminders(
+            Instant now,
+            Duration processingTimeout,
+            int limit,
+            UnaryOperator<Reminder> claimTransition
+    );
 }

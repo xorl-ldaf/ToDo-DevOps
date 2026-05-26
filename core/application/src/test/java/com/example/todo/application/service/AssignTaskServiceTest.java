@@ -6,7 +6,7 @@ import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.out.LoadTaskPort;
 import com.example.todo.application.port.out.LoadUserPort;
 import com.example.todo.application.port.out.SaveTaskPort;
-import com.example.todo.domain.shared.exception.InvalidStateTransitionException;
+import com.example.todo.application.exception.InvalidStateTransitionException;
 import com.example.todo.domain.task.Task;
 import com.example.todo.domain.task.TaskId;
 import com.example.todo.domain.task.TaskPriority;
@@ -56,7 +56,7 @@ class AssignTaskServiceTest {
         TaskId taskId = taskId("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         UserId initialAssigneeId = userId("22222222-2222-2222-2222-222222222222");
         UserId newAssigneeId = userId("33333333-3333-3333-3333-333333333333");
-        Task task = Task.restore(
+        Task task = new Task(
                 taskId,
                 userId("11111111-1111-1111-1111-111111111111"),
                 initialAssigneeId,
@@ -99,6 +99,17 @@ class AssignTaskServiceTest {
         );
 
         assertEquals("taskId must not be null", exception.getMessage());
+        verifyNoInteractions(loadTaskPort, loadUserPort, saveTaskPort);
+    }
+
+    @Test
+    void assignTaskShouldRejectNullCommandBeforeCallingPorts() {
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.assignTask(null)
+        );
+
+        assertEquals("command must not be null", exception.getMessage());
         verifyNoInteractions(loadTaskPort, loadUserPort, saveTaskPort);
     }
 
@@ -152,7 +163,7 @@ class AssignTaskServiceTest {
     void assignTaskShouldPropagateIllegalTransitionWithoutSaving() {
         TaskId taskId = taskId("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         UserId assigneeId = userId("33333333-3333-3333-3333-333333333333");
-        Task doneTask = Task.restore(
+        Task doneTask = new Task(
                 taskId,
                 userId("11111111-1111-1111-1111-111111111111"),
                 userId("22222222-2222-2222-2222-222222222222"),
@@ -180,7 +191,7 @@ class AssignTaskServiceTest {
     }
 
     private Task openTask(TaskId taskId) {
-        return Task.restore(
+        return new Task(
                 taskId,
                 userId("11111111-1111-1111-1111-111111111111"),
                 userId("22222222-2222-2222-2222-222222222222"),

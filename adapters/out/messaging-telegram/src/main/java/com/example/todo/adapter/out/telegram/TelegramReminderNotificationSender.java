@@ -70,17 +70,13 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
                     .body(TelegramApiResponse.class);
 
             if (response == null) {
-                ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.retryableFailure(
-                        "telegram API returned an empty response"
-                );
+                ReminderNotificationDeliveryResult result = TelegramDeliveryFailureClassifier.emptyResponse();
                 recordAttempt(sample, "retryable_failure");
                 logFailure(actualNotification, result, null);
                 return result;
             }
             if (!response.ok()) {
-                ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.permanentFailure(
-                        "telegram API rejected message without retry: " + response.description()
-                );
+                ReminderNotificationDeliveryResult result = TelegramDeliveryFailureClassifier.apiRejectedMessage();
                 recordAttempt(sample, "non_retryable_failure");
                 logFailure(actualNotification, result, null);
                 return result;
@@ -94,16 +90,12 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
             logFailure(actualNotification, result, exception);
             return result;
         } catch (ResourceAccessException exception) {
-            ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.retryableFailure(
-                    "telegram transport error: " + exception.getClass().getSimpleName()
-            );
+            ReminderNotificationDeliveryResult result = TelegramDeliveryFailureClassifier.transportFailure();
             recordAttempt(sample, "retryable_failure");
             logFailure(actualNotification, result, exception);
             return result;
         } catch (RestClientException exception) {
-            ReminderNotificationDeliveryResult result = ReminderNotificationDeliveryResult.retryableFailure(
-                    "telegram client error: " + exception.getClass().getSimpleName()
-            );
+            ReminderNotificationDeliveryResult result = TelegramDeliveryFailureClassifier.clientFailure(exception);
             recordAttempt(sample, "retryable_failure");
             logFailure(actualNotification, result, exception);
             return result;
@@ -139,17 +131,7 @@ public final class TelegramReminderNotificationSender implements DeliverReminder
     }
 
     private ReminderNotificationDeliveryResult classifyHttpFailure(RestClientResponseException exception) {
-        int statusCode = exception.getStatusCode().value();
-        if (statusCode == 408 || statusCode == 429 || statusCode >= 500) {
-            return ReminderNotificationDeliveryResult.retryableFailure("telegram HTTP " + statusCode);
-        }
-        if (statusCode == 400) {
-            return ReminderNotificationDeliveryResult.permanentFailure("telegram invalid request HTTP 400");
-        }
-        if (statusCode == 403) {
-            return ReminderNotificationDeliveryResult.permanentFailure("telegram chat forbidden HTTP 403");
-        }
-        return ReminderNotificationDeliveryResult.permanentFailure("telegram non-retryable HTTP " + statusCode);
+        return TelegramDeliveryFailureClassifier.httpFailure(exception.getStatusCode().value());
     }
 
     private void logFailure(

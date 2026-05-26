@@ -1,10 +1,7 @@
 package com.example.todo.adapter.out.persistence.entity;
 
-import com.example.todo.domain.reminder.ReminderStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
@@ -37,9 +34,8 @@ public class ReminderJpaEntity {
     @Column(name = "remind_at", nullable = false)
     private Instant remindAt;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
-    private ReminderStatus status;
+    private String status;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

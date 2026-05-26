@@ -1,6 +1,8 @@
 package com.example.todo.application.service;
 
 import com.example.todo.application.event.ReminderScheduledEventV1;
+import com.example.todo.application.outbox.OutboxPublicationPolicy;
+import com.example.todo.application.outbox.OutboxPublicationPolicy.PublicationFailureDecision;
 import com.example.todo.application.outbox.ReminderScheduledEventOutboxMessage;
 import com.example.todo.application.port.in.ReminderScheduledEventOutboxReport;
 import com.example.todo.application.port.out.ClaimReminderScheduledEventOutboxPort;
@@ -21,6 +23,8 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -39,6 +43,9 @@ class FlushReminderScheduledEventOutboxServiceTest {
     @Mock
     private PublishReminderScheduledEventPort publishReminderScheduledEventPort;
 
+    @Mock
+    private OutboxPublicationPolicy outboxPublicationPolicy;
+
     private FlushReminderScheduledEventOutboxService service;
 
     @BeforeEach
@@ -49,9 +56,8 @@ class FlushReminderScheduledEventOutboxServiceTest {
                 publishReminderScheduledEventPort,
                 PROCESSOR_ID,
                 25,
-                5,
-                Duration.ofSeconds(10),
-                Duration.ofSeconds(30)
+                Duration.ofSeconds(30),
+                outboxPublicationPolicy
         );
     }
 
@@ -77,6 +83,7 @@ class FlushReminderScheduledEventOutboxServiceTest {
                 publishReminderScheduledEventPort,
                 finalizeReminderScheduledEventOutboxPort
         );
+        verifyNoInteractions(outboxPublicationPolicy);
 
         assertEquals(new ReminderScheduledEventOutboxReport(1, 1, 0, 0, 0), report);
     }
@@ -84,40 +91,59 @@ class FlushReminderScheduledEventOutboxServiceTest {
     @Test
     void flushShouldKeepMessageRetryableWhenPublishFailsBeforeRetryBudgetIsExhausted() {
         ReminderScheduledEventOutboxMessage message = outboxMessage(1);
+        PublicationException exception = new PublicationException("broker unavailable");
         when(claimReminderScheduledEventOutboxPort.claimPending(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
                 .thenReturn(List.of(message));
-        doThrow(new IllegalStateException("broker unavailable"))
-                .when(publishReminderScheduledEventPort).publish(message.event());
+        doThrow(exception).when(publishReminderScheduledEventPort).publish(message.event());
+        when(outboxPublicationPolicy.decideFailure(message, NOW, exception))
+                .thenReturn(PublicationFailureDecision.retry(NOW.plusSeconds(10), "PublicationException"));
         when(finalizeReminderScheduledEventOutboxPort.reschedule(
                 message.eventId(),
                 PROCESSOR_ID,
                 NOW,
                 NOW.plusSeconds(10),
-                "IllegalStateException"
+                "PublicationException"
         )).thenReturn(true);
 
         ReminderScheduledEventOutboxReport report = service.flush(NOW);
 
+        verify(outboxPublicationPolicy).decideFailure(message, NOW, exception);
         assertEquals(new ReminderScheduledEventOutboxReport(1, 0, 1, 0, 0), report);
     }
 
     @Test
     void flushShouldMarkMessageFailedWhenRetryBudgetIsExhausted() {
         ReminderScheduledEventOutboxMessage message = outboxMessage(4);
+        PublicationException exception = new PublicationException("broker unavailable");
         when(claimReminderScheduledEventOutboxPort.claimPending(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
                 .thenReturn(List.of(message));
-        doThrow(new IllegalStateException("broker unavailable"))
-                .when(publishReminderScheduledEventPort).publish(message.event());
+        doThrow(exception).when(publishReminderScheduledEventPort).publish(message.event());
+        when(outboxPublicationPolicy.decideFailure(message, NOW, exception))
+                .thenReturn(PublicationFailureDecision.failed("PublicationException"));
         when(finalizeReminderScheduledEventOutboxPort.markFailed(
                 message.eventId(),
                 PROCESSOR_ID,
                 NOW,
-                "IllegalStateException"
+                "PublicationException"
         )).thenReturn(true);
 
         ReminderScheduledEventOutboxReport report = service.flush(NOW);
 
+        verify(outboxPublicationPolicy).decideFailure(message, NOW, exception);
         assertEquals(new ReminderScheduledEventOutboxReport(1, 0, 0, 1, 0), report);
+    }
+
+    @Test
+    void flushShouldCountConcurrencyConflictWhenPublishedMessageIsNotFinalized() {
+        ReminderScheduledEventOutboxMessage message = outboxMessage(0);
+        when(claimReminderScheduledEventOutboxPort.claimPending(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+                .thenReturn(List.of(message));
+        when(finalizeReminderScheduledEventOutboxPort.markPublished(message.eventId(), PROCESSOR_ID, NOW)).thenReturn(false);
+
+        ReminderScheduledEventOutboxReport report = service.flush(NOW);
+
+        verifyNoInteractions(outboxPublicationPolicy);
+        assertEquals(new ReminderScheduledEventOutboxReport(1, 0, 0, 0, 1), report);
     }
 
     private ReminderScheduledEventOutboxMessage outboxMessage(int deliveryAttempts) {
@@ -132,5 +158,11 @@ class FlushReminderScheduledEventOutboxServiceTest {
                 "SCHEDULED"
         );
         return new ReminderScheduledEventOutboxMessage(event.eventId(), event, deliveryAttempts, NOW);
+    }
+
+    private static final class PublicationException extends RuntimeException {
+        private PublicationException(String message) {
+            super(message);
+        }
     }
 }

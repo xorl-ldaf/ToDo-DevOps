@@ -6,6 +6,7 @@ jackson3 = "3.1.1"
 testcontainers = "1.21.4"
 mockito = "5.23.0"
 postgresql = "42.7.11"
+archunit = "1.4.2"
 
 [libraries]
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
@@ -37,6 +38,7 @@ jackson3-core = { module = "tools.jackson.core:jackson-core", version.ref = "jac
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
+archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

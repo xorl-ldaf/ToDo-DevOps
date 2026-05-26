@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface GetUserUseCase {
     Optional<User> getUser(UserId userId);
+
+    User getRequiredUser(UserId userId);
 }

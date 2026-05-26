@@ -33,7 +33,7 @@ class ListUsersServiceTest {
 
     @Test
     void listUsersShouldDelegateToLoadPort() {
-        User firstUser = User.restore(
+        User firstUser = new User(
                 new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111")),
                 "alice",
                 "Alice",
@@ -41,7 +41,7 @@ class ListUsersServiceTest {
                 Instant.parse("2026-04-20T10:00:00Z"),
                 Instant.parse("2026-04-20T10:00:00Z")
         );
-        User secondUser = User.restore(
+        User secondUser = new User(
                 new UserId(UUID.fromString("22222222-2222-2222-2222-222222222222")),
                 "bob",
                 "Bob",

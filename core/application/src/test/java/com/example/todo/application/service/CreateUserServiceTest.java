@@ -83,6 +83,17 @@ class CreateUserServiceTest {
     }
 
     @Test
+    void createUserShouldRejectNullCommandBeforeCallingPorts() {
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.createUser(null)
+        );
+
+        assertEquals("command must not be null", exception.getMessage());
+        verifyNoInteractions(loadUserPort, saveUserPort);
+    }
+
+    @Test
     void createUserShouldRejectBlankDisplayName() {
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,

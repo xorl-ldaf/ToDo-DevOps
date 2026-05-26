@@ -77,7 +77,7 @@ class TelegramReminderNotificationSenderTest {
         ReminderNotificationDeliveryResult result = sender.deliver(notification());
 
         assertTrue(result.retryableFailure());
-        assertEquals("telegram HTTP 500", result.reason());
+        assertEquals("telegram.http.retryable status=500", result.reason());
         assertEquals(1, attempts.get());
     }
 
@@ -103,6 +103,20 @@ class TelegramReminderNotificationSenderTest {
     }
 
     @Test
+    void deliverShouldNormalizeTelegramApiRejectionReason() throws Exception {
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/bottest-token/sendMessage", exchange -> writeJson(exchange, 200, """
+                {"ok":false,"description":"raw telegram token or chat details"}
+                """));
+        server.start();
+
+        ReminderNotificationDeliveryResult result = sender().deliver(notification());
+
+        assertTrue(result.permanentFailure());
+        assertEquals("telegram.api.rejected", result.reason());
+    }
+
+    @Test
     void deliverShouldClassifyForbiddenTelegramChatAsPermanentFailure() throws Exception {
         AtomicInteger attempts = new AtomicInteger();
         server = HttpServer.create(new InetSocketAddress(0), 0);
@@ -117,7 +131,7 @@ class TelegramReminderNotificationSenderTest {
         ReminderNotificationDeliveryResult result = sender().deliver(notification());
 
         assertTrue(result.permanentFailure());
-        assertEquals("telegram chat forbidden HTTP 403", result.reason());
+        assertEquals("telegram.http.forbidden status=403", result.reason());
         assertEquals(1, attempts.get());
     }
 
@@ -136,8 +150,39 @@ class TelegramReminderNotificationSenderTest {
         ReminderNotificationDeliveryResult result = sender().deliver(notification());
 
         assertTrue(result.retryableFailure());
-        assertEquals("telegram HTTP 429", result.reason());
+        assertEquals("telegram.http.retryable status=429", result.reason());
         assertEquals(1, attempts.get());
+    }
+
+    @Test
+    void deliverShouldClassifyUnknownClientHttpFailureAsPermanentFailure() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/bottest-token/sendMessage", exchange -> {
+            attempts.incrementAndGet();
+            writeJson(exchange, 404, """
+                    {"ok":false,"description":"not found"}
+                    """);
+        });
+        server.start();
+
+        ReminderNotificationDeliveryResult result = sender().deliver(notification());
+
+        assertTrue(result.permanentFailure());
+        assertEquals("telegram.http.non_retryable status=404", result.reason());
+        assertEquals(1, attempts.get());
+    }
+
+    @Test
+    void deliverShouldClassifyEmptyTelegramApiResponseAsRetryableFailure() throws Exception {
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/bottest-token/sendMessage", exchange -> writeJson(exchange, 200, ""));
+        server.start();
+
+        ReminderNotificationDeliveryResult result = sender().deliver(notification());
+
+        assertTrue(result.retryableFailure());
+        assertEquals("telegram.api.empty_response", result.reason());
     }
 
     @Test
@@ -168,6 +213,7 @@ class TelegramReminderNotificationSenderTest {
         ReminderNotificationDeliveryResult result = sender.deliver(notification());
 
         assertTrue(result.retryableFailure());
+        assertEquals("telegram.transport_error", result.reason());
         assertEquals(1, attempts.get());
     }
 

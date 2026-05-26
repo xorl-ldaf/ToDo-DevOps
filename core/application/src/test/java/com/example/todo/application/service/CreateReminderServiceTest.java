@@ -117,6 +117,17 @@ class CreateReminderServiceTest {
     }
 
     @Test
+    void createReminderShouldRejectNullCommandBeforeCallingPorts() {
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.createReminder(null)
+        );
+
+        assertEquals("command must not be null", exception.getMessage());
+        verifyNoInteractions(loadTaskPort, saveReminderPort, storeReminderScheduledEventPort);
+    }
+
+    @Test
     void createReminderShouldValidateRemindAtBeforeCallingPorts() {
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,
@@ -157,7 +168,7 @@ class CreateReminderServiceTest {
     }
 
     private Task task(TaskId taskId) {
-        return Task.restore(
+        return new Task(
                 taskId,
                 userId("11111111-1111-1111-1111-111111111111"),
                 userId("11111111-1111-1111-1111-111111111111"),

@@ -1,6 +1,7 @@
 package com.example.todo.adapter.in.web.controller;
 
 import com.example.todo.adapter.in.web.advice.GlobalExceptionHandler;
+import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.AssignTaskUseCase;
 import com.example.todo.application.port.in.CreateTaskUseCase;
 import com.example.todo.application.port.in.GetTaskUseCase;
@@ -33,7 +34,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class TaskControllerValidationTest {
     private static final Instant NOW = Instant.parse("2026-04-20T10:00:00Z");
     private static final UserId AUTHOR_ID = new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+    private static final UUID TASK_UUID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
+    private GetTaskUseCase getTaskUseCase;
     private ListTasksUseCase listTasksUseCase;
     private MockMvc mockMvc;
 
@@ -41,7 +44,7 @@ class TaskControllerValidationTest {
     void setUp() {
         CreateTaskUseCase createTaskUseCase = mock(CreateTaskUseCase.class);
         AssignTaskUseCase assignTaskUseCase = mock(AssignTaskUseCase.class);
-        GetTaskUseCase getTaskUseCase = mock(GetTaskUseCase.class);
+        getTaskUseCase = mock(GetTaskUseCase.class);
         listTasksUseCase = mock(ListTasksUseCase.class);
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
@@ -66,6 +69,7 @@ class TaskControllerValidationTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.path", is("/api/tasks")))
                 .andExpect(jsonPath("$.fieldErrors.title", notNullValue()));
     }
@@ -78,15 +82,16 @@ class TaskControllerValidationTest {
                                 {
                                   "title": "Write tests"
                                 }
-                                """))
+                """))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.fieldErrors.authorId", notNullValue()));
     }
 
     @Test
     void listTasksShouldReturnResponseDtoWithoutPersistenceFields() throws Exception {
-        Task task = Task.restore(
-                new TaskId(UUID.fromString("22222222-2222-2222-2222-222222222222")),
+        Task task = new Task(
+                new TaskId(TASK_UUID),
                 AUTHOR_ID,
                 AUTHOR_ID,
                 "Write tests",
@@ -106,5 +111,18 @@ class TaskControllerValidationTest {
                 .andExpect(jsonPath("$[0].title", is("Write tests")))
                 .andExpect(jsonPath("$[0].version").doesNotExist())
                 .andExpect(jsonPath("$[0].hibernateLazyInitializer").doesNotExist());
+    }
+
+    @Test
+    void getTaskShouldReturnNotFoundFromUseCase() throws Exception {
+        when(getTaskUseCase.getRequiredTask(new TaskId(TASK_UUID)))
+                .thenThrow(new ResourceNotFoundException("task not found: " + TASK_UUID));
+
+        mockMvc.perform(get("/api/tasks/{taskId}", TASK_UUID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.errorCode", is("RESOURCE_NOT_FOUND")))
+                .andExpect(jsonPath("$.path", is("/api/tasks/" + TASK_UUID)))
+                .andExpect(jsonPath("$.message", is("task not found: " + TASK_UUID)));
     }
 }

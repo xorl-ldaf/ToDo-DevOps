@@ -1,6 +1,9 @@
 package com.example.todo.application.service;
 
-import com.example.todo.application.notification.ReminderNotificationV1;
+import com.example.todo.application.factory.ReminderNotificationFactory;
+import com.example.todo.application.policy.ReminderDeliveryPolicy;
+import com.example.todo.application.policy.ReminderFailureReasonPolicy;
+import com.example.todo.application.policy.ReminderLifecyclePolicy;
 import com.example.todo.application.port.in.ReminderProcessingReport;
 import com.example.todo.application.port.in.ScanDueRemindersUseCase;
 import com.example.todo.application.port.out.ClaimDueRemindersPort;
@@ -17,7 +20,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 
 public class ScanDueRemindersService implements ScanDueRemindersUseCase {
     private final ClaimDueRemindersPort claimDueRemindersPort;
@@ -30,6 +32,10 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
     private final int maxDeliveryAttempts;
     private final Duration retryBackoff;
     private final Duration processingTimeout;
+    private final ReminderDeliveryPolicy reminderDeliveryPolicy;
+    private final ReminderLifecyclePolicy reminderLifecyclePolicy;
+    private final ReminderNotificationFactory reminderNotificationFactory = new ReminderNotificationFactory();
+    private final ReminderFailureReasonPolicy reminderFailureReasonPolicy = new ReminderFailureReasonPolicy();
 
     public ScanDueRemindersService(
             ClaimDueRemindersPort claimDueRemindersPort,
@@ -42,6 +48,65 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
             int maxDeliveryAttempts,
             Duration retryBackoff,
             Duration processingTimeout
+    ) {
+        this(
+                claimDueRemindersPort,
+                loadTaskPort,
+                loadUserDetailsPort,
+                deliverReminderNotificationPort,
+                finalizeReminderDeliveryPort,
+                processorId,
+                batchSize,
+                maxDeliveryAttempts,
+                retryBackoff,
+                processingTimeout,
+                new ReminderDeliveryPolicy(),
+                new ReminderLifecyclePolicy()
+        );
+    }
+
+    public ScanDueRemindersService(
+            ClaimDueRemindersPort claimDueRemindersPort,
+            LoadTaskPort loadTaskPort,
+            LoadUserDetailsPort loadUserDetailsPort,
+            DeliverReminderNotificationPort deliverReminderNotificationPort,
+            FinalizeReminderDeliveryPort finalizeReminderDeliveryPort,
+            String processorId,
+            int batchSize,
+            int maxDeliveryAttempts,
+            Duration retryBackoff,
+            Duration processingTimeout,
+            ReminderDeliveryPolicy reminderDeliveryPolicy
+    ) {
+        this(
+                claimDueRemindersPort,
+                loadTaskPort,
+                loadUserDetailsPort,
+                deliverReminderNotificationPort,
+                finalizeReminderDeliveryPort,
+                processorId,
+                batchSize,
+                maxDeliveryAttempts,
+                retryBackoff,
+                processingTimeout,
+                reminderDeliveryPolicy,
+                new ReminderLifecyclePolicy()
+        );
+    }
+
+    public ScanDueRemindersService(
+            ClaimDueRemindersPort claimDueRemindersPort,
+            LoadTaskPort loadTaskPort,
+            LoadUserDetailsPort loadUserDetailsPort,
+            DeliverReminderNotificationPort deliverReminderNotificationPort,
+            FinalizeReminderDeliveryPort finalizeReminderDeliveryPort,
+            String processorId,
+            int batchSize,
+            int maxDeliveryAttempts,
+            Duration retryBackoff,
+            Duration processingTimeout,
+            ReminderDeliveryPolicy reminderDeliveryPolicy,
+            ReminderLifecyclePolicy reminderLifecyclePolicy
     ) {
         this.claimDueRemindersPort = Objects.requireNonNull(claimDueRemindersPort, "claimDueRemindersPort must not be null");
         this.loadTaskPort = Objects.requireNonNull(loadTaskPort, "loadTaskPort must not be null");
@@ -59,13 +124,26 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
         this.maxDeliveryAttempts = requirePositive(maxDeliveryAttempts, "maxDeliveryAttempts");
         this.retryBackoff = requirePositive(retryBackoff, "retryBackoff");
         this.processingTimeout = requirePositive(processingTimeout, "processingTimeout");
+        this.reminderDeliveryPolicy = Objects.requireNonNull(
+                reminderDeliveryPolicy,
+                "reminderDeliveryPolicy must not be null"
+        );
+        this.reminderLifecyclePolicy = Objects.requireNonNull(
+                reminderLifecyclePolicy,
+                "reminderLifecyclePolicy must not be null"
+        );
     }
 
     @Override
     public ReminderProcessingReport processDueReminders(Instant now) {
         Objects.requireNonNull(now, "now must not be null");
 
-        List<Reminder> reminders = claimDueRemindersPort.claimDueReminders(now, processorId, processingTimeout, batchSize);
+        List<Reminder> reminders = claimDueRemindersPort.claimDueReminders(
+                now,
+                processingTimeout,
+                batchSize,
+                reminder -> reminderLifecyclePolicy.markProcessing(reminder, processorId, now)
+        );
         if (reminders.isEmpty()) {
             return ReminderProcessingReport.empty();
         }
@@ -76,100 +154,12 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
         int concurrencyConflictCount = 0;
 
         for (Reminder reminder : reminders) {
-            Task task = loadTaskPort.loadById(reminder.getTaskId()).orElse(null);
-            if (task == null) {
-                if (!finalizeReminderDeliveryPort.markFailed(
-                        reminder.getId(),
-                        processorId,
-                        now,
-                        "task no longer exists"
-                )) {
-                    concurrencyConflictCount++;
-                } else {
-                    failedCount++;
-                }
-                continue;
-            }
-
-            User recipient = loadUserDetailsPort.loadById(task.getAssigneeId()).orElse(null);
-            if (recipient == null) {
-                if (!finalizeReminderDeliveryPort.markFailed(
-                        reminder.getId(),
-                        processorId,
-                        now,
-                        "assignee no longer exists"
-                )) {
-                    concurrencyConflictCount++;
-                } else {
-                    failedCount++;
-                }
-                continue;
-            }
-            if (recipient.getTelegramChatId() == null) {
-                if (!finalizeReminderDeliveryPort.markFailed(
-                        reminder.getId(),
-                        processorId,
-                        now,
-                        "recipient has no telegram chat id"
-                )) {
-                    concurrencyConflictCount++;
-                } else {
-                    failedCount++;
-                }
-                continue;
-            }
-
-            ReminderNotificationDeliveryResult deliveryResult = deliverReminderNotificationPort.deliver(
-                    new ReminderNotificationV1(
-                            UUID.randomUUID(),
-                            ReminderNotificationV1.NOTIFICATION_TYPE,
-                            ReminderNotificationV1.NOTIFICATION_VERSION,
-                            now,
-                            reminder.getId().value(),
-                            task.getId().value(),
-                            task.getTitle(),
-                            task.getDescription(),
-                            reminder.getRemindAt(),
-                            recipient.getId().value(),
-                            recipient.getDisplayName(),
-                            recipient.getTelegramChatId().value()
-                    )
-            );
-
-            if (deliveryResult.deliveredSuccessfully()) {
-                if (!finalizeReminderDeliveryPort.markDelivered(reminder.getId(), processorId, now)) {
-                    concurrencyConflictCount++;
-                } else {
-                    deliveredCount++;
-                }
-                continue;
-            }
-
-            if (shouldRetry(reminder, deliveryResult)) {
-                Instant nextAttemptAt = now.plus(retryBackoff);
-                if (!finalizeReminderDeliveryPort.reschedule(
-                        reminder.getId(),
-                        processorId,
-                        now,
-                        nextAttemptAt,
-                        deliveryResult.reason()
-                )) {
-                    concurrencyConflictCount++;
-                } else {
-                    retriedCount++;
-                }
-                continue;
-            }
-
-            if (!finalizeReminderDeliveryPort.markFailed(
-                    reminder.getId(),
-                    processorId,
-                    now,
-                    deliveryResult.reason()
-            )) {
-                concurrencyConflictCount++;
-            } else {
-                failedCount++;
+            ReminderProcessingOutcome outcome = processReminder(reminder, now);
+            switch (outcome) {
+                case DELIVERED -> deliveredCount++;
+                case RETRIED -> retriedCount++;
+                case FAILED -> failedCount++;
+                case CONCURRENCY_CONFLICT -> concurrencyConflictCount++;
             }
         }
 
@@ -182,9 +172,70 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
         );
     }
 
-    private boolean shouldRetry(Reminder reminder, ReminderNotificationDeliveryResult deliveryResult) {
-        return deliveryResult.retryableFailure()
-                && reminder.getDeliveryAttempts() + 1 < maxDeliveryAttempts;
+    private ReminderProcessingOutcome processReminder(Reminder reminder, Instant now) {
+        Task task = loadTaskPort.loadById(reminder.getTaskId()).orElse(null);
+        if (task == null) {
+            return markFailed(reminder, now, reminderFailureReasonPolicy.taskMissing());
+        }
+
+        User recipient = loadUserDetailsPort.loadById(task.getAssigneeId()).orElse(null);
+        if (recipient == null) {
+            return markFailed(reminder, now, reminderFailureReasonPolicy.assigneeMissing());
+        }
+        if (reminderFailureReasonPolicy.hasNoTelegramChatId(recipient)) {
+            return markFailed(reminder, now, reminderFailureReasonPolicy.noTelegramChatId());
+        }
+
+        ReminderNotificationDeliveryResult deliveryResult = deliverReminderNotificationPort.deliver(
+                reminderNotificationFactory.create(reminder, task, recipient, now)
+        );
+
+        return finalizeDelivery(reminder, now, deliveryResult);
+    }
+
+    private ReminderProcessingOutcome finalizeDelivery(
+            Reminder reminder,
+            Instant now,
+            ReminderNotificationDeliveryResult deliveryResult
+    ) {
+        if (deliveryResult.deliveredSuccessfully()) {
+            return markDelivered(reminder, now);
+        }
+
+        if (reminderDeliveryPolicy.shouldRetry(
+                deliveryResult,
+                reminder.getDeliveryAttempts(),
+                maxDeliveryAttempts
+        )) {
+            return reschedule(reminder, now, deliveryResult.reason());
+        }
+
+        return markFailed(reminder, now, deliveryResult.reason());
+    }
+
+    private ReminderProcessingOutcome markDelivered(Reminder reminder, Instant now) {
+        Reminder deliveredReminder = reminderLifecyclePolicy.markDelivered(reminder, now);
+        if (!finalizeReminderDeliveryPort.finalizeDelivery(deliveredReminder, processorId)) {
+            return ReminderProcessingOutcome.CONCURRENCY_CONFLICT;
+        }
+        return ReminderProcessingOutcome.DELIVERED;
+    }
+
+    private ReminderProcessingOutcome reschedule(Reminder reminder, Instant now, String failureReason) {
+        Instant nextAttemptAt = now.plus(retryBackoff);
+        Reminder rescheduledReminder = reminderLifecyclePolicy.reschedule(reminder, now, nextAttemptAt, failureReason);
+        if (!finalizeReminderDeliveryPort.finalizeDelivery(rescheduledReminder, processorId)) {
+            return ReminderProcessingOutcome.CONCURRENCY_CONFLICT;
+        }
+        return ReminderProcessingOutcome.RETRIED;
+    }
+
+    private ReminderProcessingOutcome markFailed(Reminder reminder, Instant now, String failureReason) {
+        Reminder failedReminder = reminderLifecyclePolicy.markFailed(reminder, now, failureReason);
+        if (!finalizeReminderDeliveryPort.finalizeDelivery(failedReminder, processorId)) {
+            return ReminderProcessingOutcome.CONCURRENCY_CONFLICT;
+        }
+        return ReminderProcessingOutcome.FAILED;
     }
 
     private static int requirePositive(int value, String fieldName) {
@@ -208,5 +259,12 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
             throw new IllegalArgumentException(fieldName + " must not be blank");
         }
         return actualValue;
+    }
+
+    private enum ReminderProcessingOutcome {
+        DELIVERED,
+        RETRIED,
+        FAILED,
+        CONCURRENCY_CONFLICT
     }
 }

@@ -52,26 +52,35 @@ public final class KafkaReminderScheduledEventPublisher implements PublishRemind
                     "topic", topicName
             ).increment();
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Failed to serialize reminder scheduled event", exception);
+            recordFailure(sample, actualEvent, exception);
+            throw new KafkaEventPublicationException("Failed to serialize reminder scheduled event", exception);
         } catch (RuntimeException exception) {
-            sample.stop(meterRegistry.timer(
-                    "todo.reminder.scheduled.events.publish.duration",
-                    "topic", topicName,
-                    "outcome", "failure"
-            ));
-            meterRegistry.counter(
-                    "todo.reminder.scheduled.events.publish.failures",
-                    "topic", topicName,
-                    "reason", exception.getClass().getSimpleName()
-            ).increment();
-            log.error(
-                    "Kafka reminder scheduled event publish failed eventId={} reminderId={} topic={}",
-                    actualEvent.eventId(),
-                    actualEvent.reminderId(),
-                    topicName,
-                    exception
-            );
-            throw new IllegalStateException("Kafka reminder scheduled event publish failed", exception);
+            recordFailure(sample, actualEvent, exception);
+            throw new KafkaEventPublicationException("Kafka reminder scheduled event publish failed", exception);
         }
+    }
+
+    private void recordFailure(
+            Timer.Sample sample,
+            ReminderScheduledEventV1 event,
+            Exception exception
+    ) {
+        sample.stop(meterRegistry.timer(
+                "todo.reminder.scheduled.events.publish.duration",
+                "topic", topicName,
+                "outcome", "failure"
+        ));
+        meterRegistry.counter(
+                "todo.reminder.scheduled.events.publish.failures",
+                "topic", topicName,
+                "reason", exception.getClass().getSimpleName()
+        ).increment();
+        log.error(
+                "Kafka reminder scheduled event publish failed eventId={} reminderId={} topic={}",
+                event.eventId(),
+                event.reminderId(),
+                topicName,
+                exception
+        );
     }
 }

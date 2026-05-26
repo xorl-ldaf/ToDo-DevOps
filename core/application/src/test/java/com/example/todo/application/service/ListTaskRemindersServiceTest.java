@@ -91,7 +91,7 @@ class ListTaskRemindersServiceTest {
     }
 
     private Task task(TaskId taskId) {
-        return Task.restore(
+        return new Task(
                 taskId,
                 new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111")),
                 new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111")),

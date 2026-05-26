@@ -1,6 +1,7 @@
 package com.example.todo.adapter.out.persistence.adapter;
 
 import com.example.todo.adapter.out.persistence.mapper.TaskPersistenceMapper;
+import com.example.todo.adapter.out.persistence.exception.PersistenceAdapterFailures;
 import com.example.todo.adapter.out.persistence.repository.SpringDataTaskRepository;
 import com.example.todo.application.port.out.LoadAllTasksPort;
 import com.example.todo.application.port.out.LoadTaskPort;
@@ -21,22 +22,31 @@ public class TaskPersistenceAdapter implements LoadTaskPort, SaveTaskPort, LoadA
 
     @Override
     public Optional<Task> loadById(TaskId taskId) {
-        return repository.findById(taskId.value())
-                .map(TaskPersistenceMapper::toDomain);
+        return PersistenceAdapterFailures.execute(
+                "Load task",
+                () -> repository.findById(taskId.value())
+                        .map(TaskPersistenceMapper::toDomain)
+        );
     }
 
     @Override
     public List<Task> loadAll() {
-        return repository.findAll()
-                .stream()
-                .map(TaskPersistenceMapper::toDomain)
-                .toList();
+        return PersistenceAdapterFailures.execute(
+                "Load tasks",
+                () -> repository.findAll()
+                        .stream()
+                        .map(TaskPersistenceMapper::toDomain)
+                        .toList()
+        );
     }
 
     @Override
     public Task save(Task task) {
-        return TaskPersistenceMapper.toDomain(
-                repository.save(TaskPersistenceMapper.toJpa(task))
+        return PersistenceAdapterFailures.execute(
+                "Save task",
+                () -> TaskPersistenceMapper.toDomain(
+                        repository.save(TaskPersistenceMapper.toJpa(task))
+                )
         );
     }
 }

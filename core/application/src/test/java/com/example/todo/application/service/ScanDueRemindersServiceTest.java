@@ -30,8 +30,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
@@ -85,17 +87,18 @@ class ScanDueRemindersServiceTest {
         Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
         User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of(claimedReminder));
         when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
         when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
         when(deliverReminderNotificationPort.deliver(any())).thenReturn(ReminderNotificationDeliveryResult.delivered());
-        when(finalizeReminderDeliveryPort.markDelivered(claimedReminder.getId(), PROCESSOR_ID, NOW)).thenReturn(true);
+        when(finalizeReminderDeliveryPort.finalizeDelivery(any(), eq(PROCESSOR_ID))).thenReturn(true);
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
         ArgumentCaptor<com.example.todo.application.notification.ReminderNotificationV1> notificationCaptor =
                 ArgumentCaptor.forClass(com.example.todo.application.notification.ReminderNotificationV1.class);
+        ArgumentCaptor<Reminder> finalizedReminderCaptor = ArgumentCaptor.forClass(Reminder.class);
         InOrder inOrder = inOrder(
                 claimDueRemindersPort,
                 loadTaskPort,
@@ -103,11 +106,11 @@ class ScanDueRemindersServiceTest {
                 deliverReminderNotificationPort,
                 finalizeReminderDeliveryPort
         );
-        inOrder.verify(claimDueRemindersPort).claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25);
+        inOrder.verify(claimDueRemindersPort).claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any());
         inOrder.verify(loadTaskPort).loadById(claimedReminder.getTaskId());
         inOrder.verify(loadUserDetailsPort).loadById(task.getAssigneeId());
         inOrder.verify(deliverReminderNotificationPort).deliver(notificationCaptor.capture());
-        inOrder.verify(finalizeReminderDeliveryPort).markDelivered(claimedReminder.getId(), PROCESSOR_ID, NOW);
+        inOrder.verify(finalizeReminderDeliveryPort).finalizeDelivery(finalizedReminderCaptor.capture(), eq(PROCESSOR_ID));
         verifyNoMoreInteractions(
                 claimDueRemindersPort,
                 loadTaskPort,
@@ -119,6 +122,12 @@ class ScanDueRemindersServiceTest {
         assertEquals(new ReminderProcessingReport(1, 1, 0, 0, 0), report);
         assertEquals(task.getId().value(), notificationCaptor.getValue().taskId());
         assertEquals(recipient.getId().value(), notificationCaptor.getValue().recipientUserId());
+        Reminder finalizedReminder = finalizedReminderCaptor.getValue();
+        assertEquals(ReminderStatus.DELIVERED, finalizedReminder.getStatus());
+        assertEquals(NOW, finalizedReminder.getDeliveredAt());
+        assertEquals(1, finalizedReminder.getDeliveryAttempts());
+        assertNull(finalizedReminder.getProcessingOwner());
+        assertNull(finalizedReminder.getProcessingStartedAt());
     }
 
     @Test
@@ -140,67 +149,77 @@ class ScanDueRemindersServiceTest {
 
     @Test
     void processDueRemindersShouldReturnEmptyReportWhenNothingIsClaimed() {
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of());
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
         assertEquals(ReminderProcessingReport.empty(), report);
-        verify(claimDueRemindersPort).claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25);
+        verify(claimDueRemindersPort).claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any());
         verifyNoMoreInteractions(claimDueRemindersPort);
         verifyNoInteractions(loadTaskPort, loadUserDetailsPort, deliverReminderNotificationPort, finalizeReminderDeliveryPort);
     }
 
     @Test
+    void processDueRemindersShouldProvideApplicationClaimTransition() {
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
+                .thenReturn(List.of());
+
+        service.processDueReminders(NOW);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<UnaryOperator<Reminder>> claimTransitionCaptor =
+                (ArgumentCaptor<UnaryOperator<Reminder>>) (ArgumentCaptor<?>) ArgumentCaptor.forClass(UnaryOperator.class);
+        verify(claimDueRemindersPort).claimDueReminders(
+                eq(NOW),
+                eq(Duration.ofSeconds(30)),
+                eq(25),
+                claimTransitionCaptor.capture()
+        );
+
+        Reminder claimedReminder = claimTransitionCaptor.getValue()
+                .apply(scheduledReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+        assertEquals(ReminderStatus.PROCESSING, claimedReminder.getStatus());
+        assertEquals(PROCESSOR_ID, claimedReminder.getProcessingOwner());
+        assertEquals(NOW, claimedReminder.getProcessingStartedAt());
+        assertEquals(NOW, claimedReminder.getUpdatedAt());
+        assertNull(claimedReminder.getLastFailureReason());
+    }
+
+    @Test
     void processDueRemindersShouldFailReminderWhenTaskIsMissing() {
         Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of(claimedReminder));
         when(loadTaskPort.loadById(claimedReminder.getTaskId())).thenReturn(Optional.empty());
-        when(finalizeReminderDeliveryPort.markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "task no longer exists"
-        )).thenReturn(true);
+        when(finalizeReminderDeliveryPort.finalizeDelivery(any(), eq(PROCESSOR_ID))).thenReturn(true);
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
         assertEquals(new ReminderProcessingReport(1, 0, 0, 1, 0), report);
         verifyNoInteractions(loadUserDetailsPort, deliverReminderNotificationPort);
-        verify(finalizeReminderDeliveryPort).markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "task no longer exists"
-        );
+        Reminder finalizedReminder = captureFinalizedReminder();
+        assertEquals(ReminderStatus.FAILED, finalizedReminder.getStatus());
+        assertEquals("task no longer exists", finalizedReminder.getLastFailureReason());
     }
 
     @Test
     void processDueRemindersShouldFailReminderWhenRecipientIsMissing() {
         Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of(claimedReminder));
         when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
         when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.empty());
-        when(finalizeReminderDeliveryPort.markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "assignee no longer exists"
-        )).thenReturn(true);
+        when(finalizeReminderDeliveryPort.finalizeDelivery(any(), eq(PROCESSOR_ID))).thenReturn(true);
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
         assertEquals(new ReminderProcessingReport(1, 0, 0, 1, 0), report);
         verifyNoInteractions(deliverReminderNotificationPort);
-        verify(finalizeReminderDeliveryPort).markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "assignee no longer exists"
-        );
+        Reminder finalizedReminder = captureFinalizedReminder();
+        assertEquals(ReminderStatus.FAILED, finalizedReminder.getStatus());
+        assertEquals("assignee no longer exists", finalizedReminder.getLastFailureReason());
     }
 
     @Test
@@ -208,27 +227,19 @@ class ScanDueRemindersServiceTest {
         Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
         User recipient = user("11111111-1111-1111-1111-111111111111", null);
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of(claimedReminder));
         when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
         when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
-        when(finalizeReminderDeliveryPort.markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "recipient has no telegram chat id"
-        )).thenReturn(true);
+        when(finalizeReminderDeliveryPort.finalizeDelivery(any(), eq(PROCESSOR_ID))).thenReturn(true);
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
         assertEquals(new ReminderProcessingReport(1, 0, 0, 1, 0), report);
         verifyNoInteractions(deliverReminderNotificationPort);
-        verify(finalizeReminderDeliveryPort).markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "recipient has no telegram chat id"
-        );
+        Reminder finalizedReminder = captureFinalizedReminder();
+        assertEquals(ReminderStatus.FAILED, finalizedReminder.getStatus());
+        assertEquals("recipient has no telegram chat id", finalizedReminder.getLastFailureReason());
     }
 
     @Test
@@ -236,30 +247,24 @@ class ScanDueRemindersServiceTest {
         Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
         User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of(claimedReminder));
         when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
         when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
         when(deliverReminderNotificationPort.deliver(any()))
-                .thenReturn(ReminderNotificationDeliveryResult.retryableFailure("telegram timeout"));
-        when(finalizeReminderDeliveryPort.reschedule(
-                eq(claimedReminder.getId()),
-                eq(PROCESSOR_ID),
-                eq(NOW),
-                eq(NOW.plus(Duration.ofMinutes(5))),
-                eq("telegram timeout")
-        )).thenReturn(true);
+                .thenReturn(ReminderNotificationDeliveryResult.retryableFailure("transient notification failure"));
+        when(finalizeReminderDeliveryPort.finalizeDelivery(any(), eq(PROCESSOR_ID))).thenReturn(true);
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
         assertEquals(new ReminderProcessingReport(1, 0, 1, 0, 0), report);
-        verify(finalizeReminderDeliveryPort).reschedule(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                NOW.plus(Duration.ofMinutes(5)),
-                "telegram timeout"
-        );
+        Reminder finalizedReminder = captureFinalizedReminder();
+        assertEquals(ReminderStatus.SCHEDULED, finalizedReminder.getStatus());
+        assertEquals(NOW.plus(Duration.ofMinutes(5)), finalizedReminder.getNextAttemptAt());
+        assertEquals("transient notification failure", finalizedReminder.getLastFailureReason());
+        assertEquals(1, finalizedReminder.getDeliveryAttempts());
+        assertNull(finalizedReminder.getProcessingOwner());
+        assertNull(finalizedReminder.getProcessingStartedAt());
     }
 
     @Test
@@ -267,28 +272,20 @@ class ScanDueRemindersServiceTest {
         Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
         User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of(claimedReminder));
         when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
         when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
         when(deliverReminderNotificationPort.deliver(any()))
-                .thenReturn(ReminderNotificationDeliveryResult.permanentFailure("telegram chat forbidden HTTP 403"));
-        when(finalizeReminderDeliveryPort.markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "telegram chat forbidden HTTP 403"
-        )).thenReturn(true);
+                .thenReturn(ReminderNotificationDeliveryResult.permanentFailure("recipient cannot receive notifications"));
+        when(finalizeReminderDeliveryPort.finalizeDelivery(any(), eq(PROCESSOR_ID))).thenReturn(true);
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
         assertEquals(new ReminderProcessingReport(1, 0, 0, 1, 0), report);
-        verify(finalizeReminderDeliveryPort).markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "telegram chat forbidden HTTP 403"
-        );
+        Reminder finalizedReminder = captureFinalizedReminder();
+        assertEquals(ReminderStatus.FAILED, finalizedReminder.getStatus());
+        assertEquals("recipient cannot receive notifications", finalizedReminder.getLastFailureReason());
         verifyNoMoreInteractions(finalizeReminderDeliveryPort);
     }
 
@@ -297,28 +294,21 @@ class ScanDueRemindersServiceTest {
         Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 2);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
         User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of(claimedReminder));
         when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
         when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
         when(deliverReminderNotificationPort.deliver(any()))
-                .thenReturn(ReminderNotificationDeliveryResult.retryableFailure("telegram timeout"));
-        when(finalizeReminderDeliveryPort.markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "telegram timeout"
-        )).thenReturn(true);
+                .thenReturn(ReminderNotificationDeliveryResult.retryableFailure("transient notification failure"));
+        when(finalizeReminderDeliveryPort.finalizeDelivery(any(), eq(PROCESSOR_ID))).thenReturn(true);
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
         assertEquals(new ReminderProcessingReport(1, 0, 0, 1, 0), report);
-        verify(finalizeReminderDeliveryPort).markFailed(
-                claimedReminder.getId(),
-                PROCESSOR_ID,
-                NOW,
-                "telegram timeout"
-        );
+        Reminder finalizedReminder = captureFinalizedReminder();
+        assertEquals(ReminderStatus.FAILED, finalizedReminder.getStatus());
+        assertEquals("transient notification failure", finalizedReminder.getLastFailureReason());
+        assertEquals(3, finalizedReminder.getDeliveryAttempts());
     }
 
     @Test
@@ -326,12 +316,12 @@ class ScanDueRemindersServiceTest {
         Reminder claimedReminder = processingReminder("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 0);
         Task task = task("ffffffff-ffff-ffff-ffff-ffffffffffff", "Review rollout");
         User recipient = user("11111111-1111-1111-1111-111111111111", new TelegramChatId(123456789L));
-        when(claimDueRemindersPort.claimDueReminders(NOW, PROCESSOR_ID, Duration.ofSeconds(30), 25))
+        when(claimDueRemindersPort.claimDueReminders(eq(NOW), eq(Duration.ofSeconds(30)), eq(25), any()))
                 .thenReturn(List.of(claimedReminder));
         when(loadTaskPort.loadById(task.getId())).thenReturn(Optional.of(task));
         when(loadUserDetailsPort.loadById(task.getAssigneeId())).thenReturn(Optional.of(recipient));
         when(deliverReminderNotificationPort.deliver(any())).thenReturn(ReminderNotificationDeliveryResult.delivered());
-        when(finalizeReminderDeliveryPort.markDelivered(claimedReminder.getId(), PROCESSOR_ID, NOW)).thenReturn(false);
+        when(finalizeReminderDeliveryPort.finalizeDelivery(any(), eq(PROCESSOR_ID))).thenReturn(false);
 
         ReminderProcessingReport report = service.processDueReminders(NOW);
 
@@ -355,12 +345,35 @@ class ScanDueRemindersServiceTest {
         );
     }
 
+    private Reminder scheduledReminder(String reminderId) {
+        return Reminder.restore(
+                new ReminderId(UUID.fromString(reminderId)),
+                taskId("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+                NOW.minusSeconds(60),
+                ReminderStatus.SCHEDULED,
+                NOW.minusSeconds(600),
+                NOW.minusSeconds(30),
+                NOW.minusSeconds(60),
+                null,
+                null,
+                null,
+                0,
+                "previous timeout"
+        );
+    }
+
+    private Reminder captureFinalizedReminder() {
+        ArgumentCaptor<Reminder> finalizedReminderCaptor = ArgumentCaptor.forClass(Reminder.class);
+        verify(finalizeReminderDeliveryPort).finalizeDelivery(finalizedReminderCaptor.capture(), eq(PROCESSOR_ID));
+        return finalizedReminderCaptor.getValue();
+    }
+
     private TaskId taskId(String value) {
         return new TaskId(UUID.fromString(value));
     }
 
     private Task task(String taskId, String title) {
-        return Task.restore(
+        return new Task(
                 taskId(taskId),
                 userId("11111111-1111-1111-1111-111111111111"),
                 userId("11111111-1111-1111-1111-111111111111"),
@@ -375,7 +388,7 @@ class ScanDueRemindersServiceTest {
     }
 
     private User user(String userId, TelegramChatId telegramChatId) {
-        return User.restore(
+        return new User(
                 userId(userId),
                 "alice",
                 "Alice DevOps",

@@ -1,6 +1,7 @@
 package com.example.todo.adapter.out.persistence.adapter;
 
 import com.example.todo.adapter.out.persistence.mapper.UserPersistenceMapper;
+import com.example.todo.adapter.out.persistence.exception.PersistenceAdapterFailures;
 import com.example.todo.adapter.out.persistence.repository.SpringDataUserRepository;
 import com.example.todo.application.port.out.LoadAllUsersPort;
 import com.example.todo.application.port.out.LoadUserDetailsPort;
@@ -22,32 +23,44 @@ public class UserPersistenceAdapter implements LoadUserPort, LoadUserDetailsPort
 
     @Override
     public boolean existsById(UserId userId) {
-        return repository.existsById(userId.value());
+        return PersistenceAdapterFailures.execute("Check user existence", () -> repository.existsById(userId.value()));
     }
 
     @Override
     public boolean existsByUsername(String username) {
-        return repository.existsByUsernameIgnoreCase(username);
+        return PersistenceAdapterFailures.execute(
+                "Check username existence",
+                () -> repository.existsByUsernameIgnoreCase(username)
+        );
     }
 
     @Override
     public Optional<User> loadById(UserId userId) {
-        return repository.findById(userId.value())
-                .map(UserPersistenceMapper::toDomain);
+        return PersistenceAdapterFailures.execute(
+                "Load user",
+                () -> repository.findById(userId.value())
+                        .map(UserPersistenceMapper::toDomain)
+        );
     }
 
     @Override
     public List<User> loadAll() {
-        return repository.findAll()
-                .stream()
-                .map(UserPersistenceMapper::toDomain)
-                .toList();
+        return PersistenceAdapterFailures.execute(
+                "Load users",
+                () -> repository.findAll()
+                        .stream()
+                        .map(UserPersistenceMapper::toDomain)
+                        .toList()
+        );
     }
 
     @Override
     public User save(User user) {
-        return UserPersistenceMapper.toDomain(
-                repository.save(UserPersistenceMapper.toJpa(user))
+        return PersistenceAdapterFailures.execute(
+                "Save user",
+                () -> UserPersistenceMapper.toDomain(
+                        repository.save(UserPersistenceMapper.toJpa(user))
+                )
         );
     }
 }

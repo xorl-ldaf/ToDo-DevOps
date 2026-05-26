@@ -1,9 +1,12 @@
 package com.example.todo.adapter.out.persistence.adapter;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderScheduledEventReceiptJpaEntity;
+import com.example.todo.adapter.out.persistence.exception.PersistenceAdapterException;
+import com.example.todo.adapter.out.persistence.exception.PersistenceAdapterFailures;
 import com.example.todo.adapter.out.persistence.repository.SpringDataReminderScheduledEventReceiptRepository;
 import com.example.todo.application.port.out.SaveReminderScheduledEventReceiptPort;
 import com.example.todo.application.receipt.ReminderScheduledEventReceipt;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.core.NestedExceptionUtils;
 
@@ -24,7 +27,10 @@ public class ReminderScheduledEventReceiptPersistenceAdapter implements SaveRemi
         ReminderScheduledEventReceipt actualReceipt = Objects.requireNonNull(receipt, "receipt must not be null");
 
         try {
-            if (repository.existsById(actualReceipt.eventId())) {
+            if (PersistenceAdapterFailures.execute(
+                    "Check reminder scheduled event receipt existence",
+                    () -> repository.existsById(actualReceipt.eventId())
+            )) {
                 return false;
             }
             ReminderScheduledEventReceiptJpaEntity entity = new ReminderScheduledEventReceiptJpaEntity();
@@ -44,7 +50,9 @@ public class ReminderScheduledEventReceiptPersistenceAdapter implements SaveRemi
             if (isDuplicateKeyViolation(exception)) {
                 return false;
             }
-            throw exception;
+            throw new PersistenceAdapterException("Save reminder scheduled event receipt failed", exception);
+        } catch (DataAccessException exception) {
+            throw new PersistenceAdapterException("Save reminder scheduled event receipt failed", exception);
         }
     }
 

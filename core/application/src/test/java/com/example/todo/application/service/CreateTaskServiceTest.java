@@ -96,6 +96,17 @@ class CreateTaskServiceTest {
     }
 
     @Test
+    void createTaskShouldRejectNullCommandBeforeCallingPorts() {
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> service.createTask(null)
+        );
+
+        assertEquals("command must not be null", exception.getMessage());
+        verifyNoInteractions(loadUserPort, saveTaskPort);
+    }
+
+    @Test
     void createTaskShouldValidateTitleBeforeCallingPorts() {
         UserId authorId = userId("11111111-1111-1111-1111-111111111111");
 

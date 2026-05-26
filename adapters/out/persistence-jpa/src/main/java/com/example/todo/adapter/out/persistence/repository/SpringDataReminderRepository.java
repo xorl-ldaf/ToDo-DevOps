@@ -1,7 +1,6 @@
 package com.example.todo.adapter.out.persistence.repository;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderJpaEntity;
-import com.example.todo.domain.reminder.ReminderStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -47,7 +46,7 @@ public interface SpringDataReminderRepository extends JpaRepository<ReminderJpaE
             """)
     Optional<ReminderJpaEntity> findForUpdateByIdAndStatusAndProcessingOwner(
             @Param("id") UUID id,
-            @Param("status") ReminderStatus status,
+            @Param("status") String status,
             @Param("processingOwner") String processingOwner
     );
 

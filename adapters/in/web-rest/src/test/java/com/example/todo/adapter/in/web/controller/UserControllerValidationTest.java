@@ -1,9 +1,12 @@
 package com.example.todo.adapter.in.web.controller;
 
 import com.example.todo.adapter.in.web.advice.GlobalExceptionHandler;
+import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.CreateUserUseCase;
 import com.example.todo.application.port.in.GetUserUseCase;
 import com.example.todo.application.port.in.ListUsersUseCase;
+import com.example.todo.application.factory.UserFactory;
+import com.example.todo.domain.user.UserId;
 import com.example.todo.domain.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +17,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -26,15 +30,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class UserControllerValidationTest {
     private static final Instant NOW = Instant.parse("2026-04-20T10:00:00Z");
+    private static final UUID USER_UUID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private CreateUserUseCase createUserUseCase;
+    private GetUserUseCase getUserUseCase;
     private ListUsersUseCase listUsersUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         createUserUseCase = mock(CreateUserUseCase.class);
-        GetUserUseCase getUserUseCase = mock(GetUserUseCase.class);
+        getUserUseCase = mock(GetUserUseCase.class);
         listUsersUseCase = mock(ListUsersUseCase.class);
 
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
@@ -62,6 +68,7 @@ class UserControllerValidationTest {
                 .andExpect(jsonPath("$.timestamp", notNullValue()))
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.message", is("validation failed")))
                 .andExpect(jsonPath("$.path", is("/api/users")))
                 .andExpect(jsonPath("$.fieldErrors.username", notNullValue()));
@@ -70,7 +77,7 @@ class UserControllerValidationTest {
     @Test
     void listUsersShouldReturnResponseDtoWithoutPersistenceFields() throws Exception {
         when(listUsersUseCase.listUsers()).thenReturn(List.of(
-                User.createNew("alice", "Alice", null, NOW)
+                new UserFactory().create("alice", "Alice", null, NOW)
         ));
 
         mockMvc.perform(get("/api/users"))
@@ -92,8 +99,22 @@ class UserControllerValidationTest {
                                   "displayName": "Alice",
                                   "telegramChatId": 0
                                 }
-                                """))
+                """))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode", is("VALIDATION_FAILED")))
                 .andExpect(jsonPath("$.fieldErrors.telegramChatId", notNullValue()));
+    }
+
+    @Test
+    void getUserShouldReturnNotFoundFromUseCase() throws Exception {
+        when(getUserUseCase.getRequiredUser(new UserId(USER_UUID)))
+                .thenThrow(new ResourceNotFoundException("user not found: " + USER_UUID));
+
+        mockMvc.perform(get("/api/users/{userId}", USER_UUID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.errorCode", is("RESOURCE_NOT_FOUND")))
+                .andExpect(jsonPath("$.path", is("/api/users/" + USER_UUID)))
+                .andExpect(jsonPath("$.message", is("user not found: " + USER_UUID)));
     }
 }
