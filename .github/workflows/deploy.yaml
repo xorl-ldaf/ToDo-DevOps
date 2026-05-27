@@ -19,7 +19,7 @@ on:
 permissions:
   contents: read
   actions: read
-  packages: write
+  packages: read
 
 concurrency:
   group: deploy-${{ github.workflow }}-${{ inputs.target_environment }}

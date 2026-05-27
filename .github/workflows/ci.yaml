@@ -35,6 +35,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Print Docker versions
+        run: |
+          docker version
+          docker compose version
+
       - name: Validate application Compose file
         run: docker compose -f compose.yaml config -q
 
@@ -72,8 +77,8 @@ jobs:
       - name: Build project with Gradle
         run: ./gradlew clean build --no-daemon --stacktrace
 
-      - name: Upload Gradle test reports on failure
-        if: failure()
+      - name: Upload Gradle test reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gradle-unit-test-reports
@@ -120,12 +125,14 @@ jobs:
           java -version
           ./gradlew --version --no-daemon
           docker version
+          docker compose version
+          docker info
 
       - name: Run Testcontainers integration tests
         run: ./gradlew integrationTest --no-daemon --stacktrace
 
-      - name: Upload integration test reports on failure
-        if: failure()
+      - name: Upload integration test reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gradle-integration-test-reports
@@ -155,6 +162,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Print Docker versions
+        run: |
+          docker version
+          docker compose version
 
       - name: Set up Docker metadata
         id: meta
@@ -269,6 +281,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Print Docker versions
+        run: |
+          docker version
+          docker compose version
+          docker info
+
       - name: Check GitHub Container Registry availability
         run: |
           set +e
@@ -326,7 +344,18 @@ jobs:
 
       - name: Dump smoke stack logs on failure
         if: failure()
-        run: docker compose -f compose.smoke.yaml logs --no-color
+        run: |
+          mkdir -p build/ci
+          docker compose -f compose.smoke.yaml logs --no-color | tee build/ci/smoke-compose.log
+
+      - name: Upload smoke stack logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-compose-logs
+          path: build/ci/smoke-compose.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Stop smoke stack
         if: always()

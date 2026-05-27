@@ -292,7 +292,9 @@ docker compose -f compose.smoke.yaml config -q
 Run the local equivalent of the core CI checks:
 
 ```bash
+chmod +x ./gradlew
 ./gradlew clean build --no-daemon
+./gradlew test --no-daemon --stacktrace
 ./gradlew integrationTest --no-daemon --stacktrace
 docker compose -f compose.yaml config -q
 docker compose -f compose.smoke.yaml config -q
@@ -311,6 +313,19 @@ kubectl kustomize deploy/k8s/overlays/prod
 ```
 
 These commands match the local files and CI workflow. Commands that require Docker, Kubernetes, or Testcontainers need those tools available locally.
+
+Test reports:
+
+- Unit and integration test HTML reports are written under `*/build/reports/tests/`.
+- JUnit XML results are written under `*/build/test-results/`.
+- CI uploads those paths with `actions/upload-artifact` on every test job completion, so failed runs can be diagnosed from downloaded artifacts.
+
+CI job requirements:
+
+- `Validate Docker Compose config`, `Docker-backed integration tests`, `Build Docker image`, and `Smoke test published image` require Docker on the runner.
+- `Docker-backed integration tests` use Testcontainers and do not need production database, Kafka, or Telegram secrets.
+- GHCR image publishing needs `packages: write`; smoke, scan, and verification jobs need `packages: read`.
+- Cosign keyless signing and GitHub artifact attestations need `id-token: write`; attestation creation also needs `attestations: write`.
 
 Runtime-only configuration:
 

@@ -41,6 +41,7 @@ public class ReminderPersistenceAdapter implements
     }
 
     @Override
+    @Transactional
     public List<Reminder> claimDueReminders(
             Instant now,
             Duration processingTimeout,
