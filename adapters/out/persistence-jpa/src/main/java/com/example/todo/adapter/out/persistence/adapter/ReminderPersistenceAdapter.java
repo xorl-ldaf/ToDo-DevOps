@@ -18,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -83,6 +84,7 @@ public class ReminderPersistenceAdapter implements
     }
 
     @Override
+    @Transactional
     public boolean finalizeDelivery(Reminder reminder, String processorId) {
         Reminder actualReminder = Objects.requireNonNull(reminder, "reminder must not be null");
         return PersistenceAdapterFailures.execute(
