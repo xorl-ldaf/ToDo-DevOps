@@ -14,7 +14,13 @@ dependencies {
 
     constraints {
         implementation(libs.tomcat.core) {
-            because("Fixes CVE-2026-34483 and CVE-2026-34487")
+            because("Keeps embedded Tomcat on a fixed 11.0.x patch level for HIGH/CRITICAL CVEs")
+        }
+        implementation(libs.tomcat.el) {
+            because("Keeps embedded Tomcat artifacts on the same fixed 11.0.x patch level")
+        }
+        implementation(libs.tomcat.websocket) {
+            because("Keeps embedded Tomcat artifacts on the same fixed 11.0.x patch level")
         }
         implementation(libs.jackson3.core) {
             because("Fixes GHSA-2m67-wjpj-xhg9")

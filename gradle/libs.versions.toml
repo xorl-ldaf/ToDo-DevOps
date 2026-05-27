@@ -1,7 +1,7 @@
 [versions]
 spring-boot = "4.0.6"
 junit = "6.0.3"
-tomcat = "11.0.21"
+tomcat = "11.0.22"
 jackson3 = "3.1.1"
 testcontainers = "1.21.4"
 mockito = "5.23.0"
@@ -34,6 +34,8 @@ testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "tes
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
 
 tomcat-core = { module = "org.apache.tomcat.embed:tomcat-embed-core", version.ref = "tomcat" }
+tomcat-el = { module = "org.apache.tomcat.embed:tomcat-embed-el", version.ref = "tomcat" }
+tomcat-websocket = { module = "org.apache.tomcat.embed:tomcat-embed-websocket", version.ref = "tomcat" }
 jackson3-core = { module = "tools.jackson.core:jackson-core", version.ref = "jackson3" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
