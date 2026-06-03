@@ -5,12 +5,8 @@ import com.example.todo.adapter.out.persistence.entity.ReminderScheduledEventOut
 import com.example.todo.adapter.out.persistence.entity.ReminderScheduledEventOutboxStatus;
 import com.example.todo.application.event.ReminderScheduledEventV1;
 import com.example.todo.application.outbox.ReminderScheduledEventOutboxMessage;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -21,16 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ReminderScheduledEventOutboxRepositoryIT extends AbstractReminderPersistenceRepositoryIT {
 
+    @Autowired
     private ReminderScheduledEventOutboxPersistenceAdapter outboxAdapter;
-
-    @BeforeEach
-    void setUpOutboxAdapter() {
-        ObjectMapper objectMapper = JsonMapper.builder()
-                .addModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-                .build();
-        outboxAdapter = new ReminderScheduledEventOutboxPersistenceAdapter(outboxRepository, objectMapper);
-    }
 
     @Test
     void claimPendingShouldClaimOnlyAvailablePendingMessages() {

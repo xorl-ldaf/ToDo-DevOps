@@ -1,6 +1,7 @@
 package com.example.todo.adapter.out.persistence.repository;
 
 import com.example.todo.adapter.out.persistence.adapter.ReminderPersistenceAdapter;
+import com.example.todo.adapter.out.persistence.adapter.ReminderScheduledEventOutboxPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.adapter.TaskPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.adapter.UserPersistenceAdapter;
 import com.example.todo.adapter.out.persistence.entity.ReminderJpaEntity;
@@ -8,6 +9,10 @@ import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderId;
 import com.example.todo.domain.reminder.ReminderStatus;
 import com.example.todo.domain.task.TaskId;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackage;
@@ -341,6 +346,22 @@ abstract class AbstractReminderPersistenceRepositoryIT {
         @Bean
         ReminderPersistenceAdapter reminderPersistenceAdapter(SpringDataReminderRepository repository) {
             return new ReminderPersistenceAdapter(repository);
+        }
+
+        @Bean
+        ObjectMapper objectMapper() {
+            return JsonMapper.builder()
+                    .addModule(new JavaTimeModule())
+                    .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                    .build();
+        }
+
+        @Bean
+        ReminderScheduledEventOutboxPersistenceAdapter reminderScheduledEventOutboxPersistenceAdapter(
+                SpringDataReminderScheduledEventOutboxRepository repository,
+                ObjectMapper objectMapper
+        ) {
+            return new ReminderScheduledEventOutboxPersistenceAdapter(repository, objectMapper);
         }
 
         @Bean
