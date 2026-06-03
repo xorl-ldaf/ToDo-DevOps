@@ -30,6 +30,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -47,7 +48,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @ActiveProfiles("test")
 class ReminderTelegramIntegrationTest {
     private static final Instant INITIAL_TIME = Instant.parse("2026-04-21T10:00:00Z");
-    private static final Instant REMIND_AT = Instant.parse("2026-04-21T10:30:00Z");
+    private static final Instant REMIND_AT = INITIAL_TIME.plus(Duration.ofMinutes(30));
     private static final LinkedBlockingQueue<String> TELEGRAM_REQUEST_BODIES = new LinkedBlockingQueue<>();
     private static volatile HttpServer telegramServer;
 
@@ -111,7 +112,7 @@ class ReminderTelegramIntegrationTest {
         assertTrue(outboundBody.contains("\"chat_id\":123456789"));
         assertTrue(outboundBody.contains("\"text\":\"Reminder: Review prod deploy"));
         assertTrue(outboundBody.contains("Assignee: Telegram User"));
-        assertTrue(outboundBody.contains("Remind at: 2026-04-21T10:30:00Z"));
+        assertTrue(outboundBody.contains("Remind at: " + REMIND_AT));
 
         String storedStatus = jdbcTemplate.queryForObject(
                 "select status from reminders where id = ?::uuid",
