@@ -12,6 +12,7 @@ import com.example.todo.application.port.out.FinalizeReminderScheduledEventOutbo
 import com.example.todo.application.port.out.StoreReminderScheduledEventPort;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -56,6 +57,7 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
     }
 
     @Override
+    @Transactional
     public List<ReminderScheduledEventOutboxMessage> claimPending(
             Instant now,
             String processorId,
@@ -84,6 +86,7 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
     }
 
     @Override
+    @Transactional
     public boolean markPublished(UUID eventId, String processorId, Instant publishedAt) {
         return withClaimedMessage(eventId, processorId, entity -> {
             entity.setStatus(ReminderScheduledEventOutboxStatus.PUBLISHED);
@@ -97,6 +100,7 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
     }
 
     @Override
+    @Transactional
     public boolean reschedule(
             UUID eventId,
             String processorId,
@@ -116,6 +120,7 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
     }
 
     @Override
+    @Transactional
     public boolean markFailed(UUID eventId, String processorId, Instant processedAt, String failureReason) {
         return withClaimedMessage(eventId, processorId, entity -> {
             entity.setStatus(ReminderScheduledEventOutboxStatus.FAILED);
@@ -132,7 +137,7 @@ public class ReminderScheduledEventOutboxPersistenceAdapter implements
                 "Finalize reminder scheduled event outbox message",
                 () -> repository.findForUpdateByEventIdAndStatusAndProcessingOwner(
                                 eventId,
-                                "PROCESSING",
+                                ReminderScheduledEventOutboxStatus.PROCESSING,
                                 processorId
                         )
                         .map(entity -> {

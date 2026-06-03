@@ -83,6 +83,24 @@ class TaskStatePolicyTest {
     }
 
     @Test
+    void assignShouldRejectTimestampMovingBackwards() {
+        Instant createdAt = Instant.parse("2026-04-20T10:00:00Z");
+        Instant updatedAt = createdAt.plusSeconds(120);
+        Task task = task(TaskStatus.OPEN, createdAt, updatedAt);
+
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
+                () -> taskStatePolicy.assign(
+                        task,
+                        userId("33333333-3333-3333-3333-333333333333"),
+                        updatedAt.minusSeconds(1)
+                )
+        );
+
+        assertEquals("updatedAt must not move backwards", exception.getMessage());
+    }
+
+    @Test
     void markCompletedShouldMoveOpenTaskToDone() {
         Instant createdAt = Instant.parse("2026-04-20T10:00:00Z");
         Instant completedAt = createdAt.plusSeconds(600);

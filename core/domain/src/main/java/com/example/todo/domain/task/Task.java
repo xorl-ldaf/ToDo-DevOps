@@ -3,7 +3,6 @@ package com.example.todo.domain.task;
 import com.example.todo.domain.user.UserId;
 
 import java.time.Instant;
-import java.util.Objects;
 
 public record Task(
         TaskId id,
@@ -17,6 +16,18 @@ public record Task(
         Instant createdAt,
         Instant updatedAt
 ) {
+    public Task {
+        id = requireNonNull(id, "id");
+        authorId = requireNonNull(authorId, "authorId");
+        assigneeId = requireNonNull(assigneeId, "assigneeId");
+        title = requireText(title, "title");
+        description = description == null ? "" : description;
+        status = requireNonNull(status, "status");
+        priority = requireNonNull(priority, "priority");
+        createdAt = requireNonNull(createdAt, "createdAt");
+        updatedAt = requireValidUpdatedAt(createdAt, updatedAt);
+    }
+
     public static Task createNew(
             UserId authorId,
             UserId assigneeId,
@@ -26,8 +37,8 @@ public record Task(
             Instant dueAt,
             Instant createdAt
     ) {
-        UserId actualAuthorId = Objects.requireNonNull(authorId, "authorId must not be null");
-        Instant actualCreatedAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
+        UserId actualAuthorId = requireNonNull(authorId, "authorId");
+        Instant actualCreatedAt = requireNonNull(createdAt, "createdAt");
         return new Task(
                 TaskId.newId(),
                 actualAuthorId,
@@ -66,6 +77,53 @@ public record Task(
                 requireNonNull(createdAt, "createdAt"),
                 requireNonNull(updatedAt, "updatedAt")
         );
+    }
+
+    public Task assignTo(UserId newAssigneeId, Instant updatedAt) {
+        if (status == TaskStatus.DONE || status == TaskStatus.CANCELLED) {
+            throw new IllegalStateException("task cannot be reassigned from status: " + status);
+        }
+
+        Instant actualUpdatedAt = requireNonNull(updatedAt, "updatedAt");
+        if (actualUpdatedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("updatedAt must not be before createdAt");
+        }
+        if (actualUpdatedAt.isBefore(this.updatedAt)) {
+            throw new IllegalArgumentException("updatedAt must not move backwards");
+        }
+
+        TaskStatus nextStatus = status == TaskStatus.OPEN
+                ? TaskStatus.IN_PROGRESS
+                : status;
+
+        return Task.restore(
+                id,
+                authorId,
+                requireNonNull(newAssigneeId, "newAssigneeId"),
+                title,
+                description,
+                nextStatus,
+                priority,
+                dueAt,
+                createdAt,
+                actualUpdatedAt
+        );
+    }
+
+    private static Instant requireValidUpdatedAt(Instant createdAt, Instant updatedAt) {
+        Instant actualUpdatedAt = requireNonNull(updatedAt, "updatedAt");
+        if (actualUpdatedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("updatedAt must not be before createdAt");
+        }
+        return actualUpdatedAt;
+    }
+
+    private static String requireText(String value, String fieldName) {
+        String actualValue = requireNonNull(value, fieldName);
+        if (actualValue.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return actualValue;
     }
 
     private static <T> T requireNonNull(T value, String fieldName) {

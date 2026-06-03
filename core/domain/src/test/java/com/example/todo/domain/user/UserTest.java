@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class UserTest {
 
@@ -47,5 +48,41 @@ class UserTest {
         assertFalse(methods.contains("createNew"));
         assertFalse(methods.contains("restore"));
         assertFalse(methods.contains("linkTelegramChat"));
+    }
+
+    @Test
+    void constructorShouldRejectBlankUsernameAndDisplayName() {
+        UserId userId = new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+        Instant now = Instant.parse("2026-04-20T10:00:00Z");
+
+        IllegalArgumentException usernameException = assertThrows(
+                IllegalArgumentException.class,
+                () -> new User(userId, " ", "Alice", null, now, now)
+        );
+        IllegalArgumentException displayNameException = assertThrows(
+                IllegalArgumentException.class,
+                () -> new User(userId, "alice", "", null, now, now)
+        );
+
+        assertEquals("username must not be blank", usernameException.getMessage());
+        assertEquals("displayName must not be blank", displayNameException.getMessage());
+    }
+
+    @Test
+    void constructorShouldRejectInvalidTimestamps() {
+        UserId userId = new UserId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+        Instant createdAt = Instant.parse("2026-04-20T10:00:00Z");
+
+        IllegalArgumentException missingCreatedAtException = assertThrows(
+                IllegalArgumentException.class,
+                () -> new User(userId, "alice", "Alice", null, null, createdAt)
+        );
+        IllegalArgumentException updatedAtException = assertThrows(
+                IllegalArgumentException.class,
+                () -> new User(userId, "alice", "Alice", null, createdAt, createdAt.minusSeconds(1))
+        );
+
+        assertEquals("createdAt must not be null", missingCreatedAtException.getMessage());
+        assertEquals("updatedAt must not be before createdAt", updatedAtException.getMessage());
     }
 }

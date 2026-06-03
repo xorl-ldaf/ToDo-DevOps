@@ -56,9 +56,6 @@ public class CreateTaskService implements CreateTaskUseCase {
             throw new ApplicationValidationException("command must not be null");
         }
 
-        userReferencePolicy.requireExistingAuthor(command.authorId());
-        userReferencePolicy.requireExistingAssigneeIfPresent(command.assigneeId());
-
         Task task = taskFactory.create(
                 command.authorId(),
                 command.assigneeId(),
@@ -68,6 +65,9 @@ public class CreateTaskService implements CreateTaskUseCase {
                 command.dueAt(),
                 clock.instant()
         );
+
+        userReferencePolicy.requireExistingAuthor(task.getAuthorId());
+        userReferencePolicy.requireExistingAssigneeIfPresent(command.assigneeId());
 
         return saveTaskPort.save(task);
     }

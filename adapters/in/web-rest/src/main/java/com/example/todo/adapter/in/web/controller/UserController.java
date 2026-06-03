@@ -10,6 +10,8 @@ import com.example.todo.application.port.in.ListUsersUseCase;
 import com.example.todo.application.query.PageQuery;
 import com.example.todo.domain.user.UserId;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -45,8 +47,8 @@ public class UserController {
 
     @GetMapping
     public PageResponse<UserResponse> listUsers(
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size,
             @RequestParam(name = "sort", required = false) String sort
     ) {
         return WebApiMapper.toResponse(

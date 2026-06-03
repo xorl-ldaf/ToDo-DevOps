@@ -125,6 +125,62 @@ class UserTaskPersistenceAdapterIT extends AbstractReminderPersistenceRepository
         assertThat(filtered.totalPages()).isEqualTo(1);
     }
 
+    @Test
+    void loadTasksShouldApplyPriorityFilterSortingAndPagination() {
+        User author = new User(
+                userId("11111111-1111-1111-1111-111111111111"),
+                "task.page.author",
+                "Task Page Author",
+                null,
+                NOW.minusSeconds(300),
+                NOW.minusSeconds(300)
+        );
+        userAdapter.save(author);
+
+        Task alpha = task(
+                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                author.getId(),
+                author.getId(),
+                "Alpha high task",
+                TaskStatus.OPEN,
+                TaskPriority.HIGH,
+                null
+        );
+        Task beta = task(
+                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                author.getId(),
+                author.getId(),
+                "Beta high task",
+                TaskStatus.DONE,
+                TaskPriority.HIGH,
+                null
+        );
+        Task critical = task(
+                "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                author.getId(),
+                author.getId(),
+                "Critical task",
+                TaskStatus.OPEN,
+                TaskPriority.CRITICAL,
+                null
+        );
+        taskAdapter.save(beta);
+        taskAdapter.save(critical);
+        taskAdapter.save(alpha);
+
+        PageResult<Task> page = taskAdapter.load(
+                new PageQuery(1, 1, "title,asc"),
+                null,
+                TaskPriority.HIGH
+        );
+
+        assertThat(page.items()).containsExactly(beta);
+        assertThat(page.page()).isEqualTo(1);
+        assertThat(page.size()).isEqualTo(1);
+        assertThat(page.totalElements()).isEqualTo(2);
+        assertThat(page.totalPages()).isEqualTo(2);
+    }
+
     private Task task(
             String taskId,
             UserId authorId,

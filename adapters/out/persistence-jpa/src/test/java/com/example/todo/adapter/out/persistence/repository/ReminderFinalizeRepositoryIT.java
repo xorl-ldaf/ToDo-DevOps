@@ -28,7 +28,7 @@ class ReminderFinalizeRepositoryIT extends AbstractReminderPersistenceRepository
         assertThat(wrongOwnerResult).isFalse();
         assertThat(matchingOwnerResult).isTrue();
         ReminderJpaEntity stored = requireReminder(reminderId);
-        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.DELIVERED.name());
+        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.DELIVERED);
         assertThat(stored.getProcessingOwner()).isNull();
         assertThat(stored.getProcessingStartedAt()).isNull();
         assertThat(stored.getDeliveredAt()).isEqualTo(NOW);
@@ -48,7 +48,7 @@ class ReminderFinalizeRepositoryIT extends AbstractReminderPersistenceRepository
 
         assertThat(result).isFalse();
         ReminderJpaEntity stored = requireReminder(reminderId);
-        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.PROCESSING.name());
+        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.PROCESSING);
         assertThat(stored.getProcessingOwner()).isEqualTo("worker-1");
         assertThat(stored.getDeliveredAt()).isNull();
     }
@@ -71,7 +71,7 @@ class ReminderFinalizeRepositoryIT extends AbstractReminderPersistenceRepository
 
         assertThat(result).isTrue();
         ReminderJpaEntity stored = requireReminder(reminderId);
-        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.SCHEDULED.name());
+        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.SCHEDULED);
         assertThat(stored.getNextAttemptAt()).isEqualTo(nextAttemptAt);
         assertThat(stored.getProcessingOwner()).isNull();
         assertThat(stored.getProcessingStartedAt()).isNull();
@@ -95,7 +95,7 @@ class ReminderFinalizeRepositoryIT extends AbstractReminderPersistenceRepository
 
         assertThat(result).isTrue();
         ReminderJpaEntity stored = requireReminder(reminderId);
-        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.FAILED.name());
+        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.FAILED);
         assertThat(stored.getProcessingOwner()).isNull();
         assertThat(stored.getProcessingStartedAt()).isNull();
         assertThat(stored.getDeliveryAttempts()).isEqualTo(2);

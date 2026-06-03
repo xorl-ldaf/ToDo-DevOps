@@ -4,6 +4,7 @@ import com.example.todo.application.outbox.OutboxPublicationPolicy;
 import com.example.todo.application.outbox.OutboxPublicationPolicy.PublicationFailureDecision;
 import com.example.todo.application.outbox.OutboxPublicationPolicy.PublicationFailureOutcome;
 import com.example.todo.application.outbox.ReminderScheduledEventOutboxMessage;
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.port.in.FlushReminderScheduledEventOutboxUseCase;
 import com.example.todo.application.port.in.ReminderScheduledEventOutboxReport;
 import com.example.todo.application.port.out.ClaimReminderScheduledEventOutboxPort;
@@ -77,10 +78,10 @@ public class FlushReminderScheduledEventOutboxService implements FlushReminderSc
 
     @Override
     public ReminderScheduledEventOutboxReport flush(Instant now) {
-        Objects.requireNonNull(now, "now must not be null");
+        Instant actualNow = requireNonNull(now, "now");
 
         List<ReminderScheduledEventOutboxMessage> messages = claimReminderScheduledEventOutboxPort.claimPending(
-                now,
+                actualNow,
                 processorId,
                 processingTimeout,
                 batchSize
@@ -97,18 +98,18 @@ public class FlushReminderScheduledEventOutboxService implements FlushReminderSc
         for (ReminderScheduledEventOutboxMessage message : messages) {
             try {
                 publishReminderScheduledEventPort.publish(message.event());
-                if (!finalizeReminderScheduledEventOutboxPort.markPublished(message.eventId(), processorId, now)) {
+                if (!finalizeReminderScheduledEventOutboxPort.markPublished(message.eventId(), processorId, actualNow)) {
                     concurrencyConflictCount++;
                 } else {
                     publishedCount++;
                 }
             } catch (RuntimeException exception) {
-                PublicationFailureDecision decision = outboxPublicationPolicy.decideFailure(message, now, exception);
+                PublicationFailureDecision decision = outboxPublicationPolicy.decideFailure(message, actualNow, exception);
                 if (decision.outcome() == PublicationFailureOutcome.RETRY) {
                     if (!finalizeReminderScheduledEventOutboxPort.reschedule(
                             message.eventId(),
                             processorId,
-                            now,
+                            actualNow,
                             decision.nextAttemptAt(),
                             decision.failureReason()
                     )) {
@@ -122,7 +123,7 @@ public class FlushReminderScheduledEventOutboxService implements FlushReminderSc
                 if (!finalizeReminderScheduledEventOutboxPort.markFailed(
                         message.eventId(),
                         processorId,
-                        now,
+                        actualNow,
                         decision.failureReason()
                 )) {
                     concurrencyConflictCount++;
@@ -143,24 +144,31 @@ public class FlushReminderScheduledEventOutboxService implements FlushReminderSc
 
     private static int requirePositive(int value, String fieldName) {
         if (value < 1) {
-            throw new IllegalArgumentException(fieldName + " must be at least 1");
+            throw new ApplicationValidationException(fieldName + " must be at least 1");
         }
         return value;
     }
 
     private static Duration requirePositive(Duration value, String fieldName) {
-        Duration actualValue = Objects.requireNonNull(value, fieldName + " must not be null");
+        Duration actualValue = requireNonNull(value, fieldName);
         if (actualValue.isNegative() || actualValue.isZero()) {
-            throw new IllegalArgumentException(fieldName + " must be positive");
+            throw new ApplicationValidationException(fieldName + " must be positive");
         }
         return actualValue;
     }
 
     private static String requireText(String value, String fieldName) {
-        String actualValue = Objects.requireNonNull(value, fieldName + " must not be null");
+        String actualValue = requireNonNull(value, fieldName);
         if (actualValue.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
+            throw new ApplicationValidationException(fieldName + " must not be blank");
         }
         return actualValue;
+    }
+
+    private static <T> T requireNonNull(T value, String fieldName) {
+        if (value == null) {
+            throw new ApplicationValidationException(fieldName + " must not be null");
+        }
+        return value;
     }
 }

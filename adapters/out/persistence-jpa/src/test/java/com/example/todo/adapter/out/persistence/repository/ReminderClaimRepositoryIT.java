@@ -73,7 +73,7 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
             assertThat(reminder.getProcessingOwner()).isEqualTo("worker-1");
             assertThat(reminder.getProcessingStartedAt()).isEqualTo(NOW);
         });
-        assertThat(requireReminder(futureReminderId).getStatus()).isEqualTo(ReminderStatus.SCHEDULED.name());
+        assertThat(requireReminder(futureReminderId).getStatus()).isEqualTo(ReminderStatus.SCHEDULED);
     }
 
     @Test
@@ -122,7 +122,7 @@ class ReminderClaimRepositoryIT extends AbstractReminderPersistenceRepositoryIT 
 
         assertThat(claimed).extracting(reminder -> reminder.getId().value()).containsExactly(reminderId);
         ReminderJpaEntity stored = requireReminder(reminderId);
-        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.PROCESSING.name());
+        assertThat(stored.getStatus()).isEqualTo(ReminderStatus.PROCESSING);
         assertThat(stored.getProcessingOwner()).isEqualTo("new-worker");
         assertThat(stored.getProcessingStartedAt()).isEqualTo(NOW);
     }

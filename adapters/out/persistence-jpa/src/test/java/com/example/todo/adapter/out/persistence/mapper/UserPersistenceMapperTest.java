@@ -59,6 +59,15 @@ class UserPersistenceMapperTest {
         assertThat(user.getTelegramChatId()).isNull();
     }
 
+    @Test
+    void shouldRoundTripUserWithoutLosingFields() {
+        User user = user();
+
+        User roundTrip = UserPersistenceMapper.toDomain(UserPersistenceMapper.toJpa(user));
+
+        assertThat(roundTrip).isEqualTo(user);
+    }
+
     private User user() {
         return user(new TelegramChatId(123456789L));
     }

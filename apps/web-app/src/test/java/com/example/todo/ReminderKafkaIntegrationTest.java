@@ -45,7 +45,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class ReminderKafkaIntegrationTest {
 
     private static final Instant INITIAL_TIME = Instant.parse("2026-02-15T10:00:00Z");
-    private static final Instant REMIND_AT = Instant.parse("2026-02-15T12:00:00Z");
+    private static final Instant REMIND_AT = Instant.parse("2099-02-15T12:00:00Z");
     private static final String TOPIC = "todo.reminder.scheduled.v1.test";
     private static final String CONSUMER_GROUP_ID = "todo-web-app-reminder-scheduled-v1-test";
 

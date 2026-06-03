@@ -1,5 +1,6 @@
 package com.example.todo.application.service;
 
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.policy.TaskReferencePolicy;
 import com.example.todo.application.port.in.ListTaskRemindersUseCase;
 import com.example.todo.application.port.out.LoadTaskPort;
@@ -29,8 +30,15 @@ public class ListTaskRemindersService implements ListTaskRemindersUseCase {
         taskReferencePolicy.requireTaskExists(taskId);
         return loadTaskRemindersPort.loadByTaskId(
                 taskId,
-                Objects.requireNonNull(pageQuery, "pageQuery must not be null"),
+                requireNonNull(pageQuery, "pageQuery"),
                 status
         );
+    }
+
+    private static <T> T requireNonNull(T value, String fieldName) {
+        if (value == null) {
+            throw new ApplicationValidationException(fieldName + " must not be null");
+        }
+        return value;
     }
 }

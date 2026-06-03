@@ -5,10 +5,19 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
+
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class ArchitectureTest {
     private static final String DOMAIN = "com.example.todo.domain..";
@@ -26,6 +35,19 @@ class ArchitectureTest {
     private static final String WEB_DTOS = "com.example.todo.adapter.in.web.dto..";
     private static final String JPA_ENTITIES = "com.example.todo.adapter.out.persistence.entity..";
     private static final String APPLICATION_OUT_PORTS = "com.example.todo.application.port.out..";
+    private static final Path REPO_ROOT = locateRepositoryRoot();
+    private static final Pattern PROJECT_DEPENDENCY = Pattern.compile("project\\(\"([^\"]+)\"\\)");
+    private static final Set<String> CORE_INWARD_DEPENDENCIES = Set.of(":core:domain");
+    private static final Set<String> ADAPTER_INWARD_DEPENDENCIES = Set.of(":core:domain", ":core:application");
+    private static final Set<String> WEB_APP_COMPOSITION_ROOT_DEPENDENCIES = Set.of(
+            ":core:domain",
+            ":core:application",
+            ":adapters:out:persistence-jpa",
+            ":adapters:out:messaging-kafka",
+            ":adapters:out:messaging-telegram",
+            ":adapters:in:messaging-kafka",
+            ":adapters:in:web-rest"
+    );
 
     private static final String[] DOMAIN_FORBIDDEN_DEPENDENCIES = {
             APPLICATION,
@@ -74,6 +96,43 @@ class ArchitectureTest {
             new ClassFileImporter()
                     .withImportOption(new ImportOption.DoNotIncludeTests())
                     .importPackages("com.example.todo");
+
+    @Test
+    void gradle_module_dependencies_follow_onion_direction() throws IOException {
+        assertThat(projectDependencies("core/domain"))
+                .as("domain stays independent from Spring/JPA/adapters/modules")
+                .isEmpty();
+
+        assertThat(projectDependencies("core/application"))
+                .as("application may depend inward on domain only")
+                .contains(":core:domain")
+                .allMatch(CORE_INWARD_DEPENDENCIES::contains);
+
+        for (String adapterModule : List.of(
+                "adapters/in/web-rest",
+                "adapters/in/messaging-kafka",
+                "adapters/out/persistence-jpa",
+                "adapters/out/messaging-kafka",
+                "adapters/out/messaging-telegram"
+        )) {
+            assertThat(projectDependencies(adapterModule))
+                    .as(adapterModule + " may depend inward on application/domain only")
+                    .contains(":core:application")
+                    .allMatch(ADAPTER_INWARD_DEPENDENCIES::contains);
+        }
+
+        assertThat(projectDependencies("apps/web-app"))
+                .as("web-app is the composition root and may wire application with adapters")
+                .contains(
+                        ":core:application",
+                        ":adapters:out:persistence-jpa",
+                        ":adapters:out:messaging-kafka",
+                        ":adapters:out:messaging-telegram",
+                        ":adapters:in:messaging-kafka",
+                        ":adapters:in:web-rest"
+                )
+                .allMatch(WEB_APP_COMPOSITION_ROOT_DEPENDENCIES::contains);
+    }
 
     @Test
     void onion_layers_point_inward_and_web_app_is_the_composition_root() {
@@ -239,5 +298,25 @@ class ArchitectureTest {
         persistenceAdapters.check(productionClasses);
         kafkaPublishers.check(productionClasses);
         telegramSenders.check(productionClasses);
+    }
+
+    private static List<String> projectDependencies(String modulePath) throws IOException {
+        String buildFile = Files.readString(REPO_ROOT.resolve(modulePath).resolve("build.gradle.kts"));
+        return PROJECT_DEPENDENCY.matcher(buildFile)
+                .results()
+                .map(MatchResult::group)
+                .map(dependency -> dependency.substring("project(\"".length(), dependency.length() - "\")".length()))
+                .toList();
+    }
+
+    private static Path locateRepositoryRoot() {
+        Path currentPath = Path.of("").toAbsolutePath();
+        while (currentPath != null) {
+            if (Files.exists(currentPath.resolve("settings.gradle.kts"))) {
+                return currentPath;
+            }
+            currentPath = currentPath.getParent();
+        }
+        throw new IllegalStateException("Repository root with settings.gradle.kts was not found");
     }
 }

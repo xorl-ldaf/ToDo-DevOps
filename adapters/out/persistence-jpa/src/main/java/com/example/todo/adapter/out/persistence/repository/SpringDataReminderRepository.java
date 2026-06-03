@@ -1,6 +1,7 @@
 package com.example.todo.adapter.out.persistence.repository;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderJpaEntity;
+import com.example.todo.domain.reminder.ReminderStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,11 +49,11 @@ public interface SpringDataReminderRepository extends JpaRepository<ReminderJpaE
             """)
     Optional<ReminderJpaEntity> findForUpdateByIdAndStatusAndProcessingOwner(
             @Param("id") UUID id,
-            @Param("status") String status,
+            @Param("status") ReminderStatus status,
             @Param("processingOwner") String processingOwner
     );
 
     Page<ReminderJpaEntity> findByTaskId(UUID taskId, Pageable pageable);
 
-    Page<ReminderJpaEntity> findByTaskIdAndStatus(UUID taskId, String status, Pageable pageable);
+    Page<ReminderJpaEntity> findByTaskIdAndStatus(UUID taskId, ReminderStatus status, Pageable pageable);
 }

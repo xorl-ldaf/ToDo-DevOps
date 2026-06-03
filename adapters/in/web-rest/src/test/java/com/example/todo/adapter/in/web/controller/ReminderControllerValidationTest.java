@@ -1,7 +1,6 @@
 package com.example.todo.adapter.in.web.controller;
 
 import com.example.todo.adapter.in.web.advice.GlobalExceptionHandler;
-import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.exception.ResourceNotFoundException;
 import com.example.todo.application.port.in.CreateReminderUseCase;
 import com.example.todo.application.port.in.ListTaskRemindersUseCase;
@@ -36,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ReminderControllerValidationTest {
     private static final Instant NOW = Instant.parse("2026-04-20T10:00:00Z");
     private static final Instant REMIND_AT = Instant.parse("2026-04-20T11:00:00Z");
+    private static final String FUTURE_REMIND_AT = "2099-04-20T11:00:00Z";
     private static final UUID TASK_UUID = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     private CreateReminderUseCase createReminderUseCase;
@@ -96,9 +96,9 @@ class ReminderControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "remindAt": "2026-04-20T11:00:00Z"
+                                  "remindAt": "%s"
                                 }
-                                """))
+                                """.formatted(FUTURE_REMIND_AT)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status", is(404)))
                 .andExpect(jsonPath("$.path", is("/api/tasks/" + TASK_UUID + "/reminders")))
@@ -107,10 +107,7 @@ class ReminderControllerValidationTest {
     }
 
     @Test
-    void createReminderShouldReturnBadRequestForInvalidReminderTime() throws Exception {
-        when(createReminderUseCase.createReminder(any()))
-                .thenThrow(new ApplicationValidationException("remindAt must not be in the past"));
-
+    void createReminderShouldReturnFieldErrorForPastRemindAt() throws Exception {
         mockMvc.perform(post("/api/tasks/{taskId}/reminders", TASK_UUID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -120,8 +117,11 @@ class ReminderControllerValidationTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status", is(400)))
-                .andExpect(jsonPath("$.message", is("remindAt must not be in the past")))
-                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+                .andExpect(jsonPath("$.message", is("validation failed")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("remindAt")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
+        verifyNoInteractions(createReminderUseCase);
     }
 
     @Test
@@ -142,5 +142,25 @@ class ReminderControllerValidationTest {
                 .andExpect(jsonPath("$.totalPages", is(1)))
                 .andExpect(jsonPath("$.items[0].version").doesNotExist())
                 .andExpect(jsonPath("$.items[0].hibernateLazyInitializer").doesNotExist());
+    }
+
+    @Test
+    void listRemindersShouldRejectNegativePage() throws Exception {
+        mockMvc.perform(get("/api/tasks/{taskId}/reminders", TASK_UUID).param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("page must be greater than or equal to 0")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+
+        verifyNoInteractions(listTaskRemindersUseCase);
+    }
+
+    @Test
+    void listRemindersShouldRejectTooLargePageSize() throws Exception {
+        mockMvc.perform(get("/api/tasks/{taskId}/reminders", TASK_UUID).param("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("size must be between 1 and 100")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+
+        verifyNoInteractions(listTaskRemindersUseCase);
     }
 }

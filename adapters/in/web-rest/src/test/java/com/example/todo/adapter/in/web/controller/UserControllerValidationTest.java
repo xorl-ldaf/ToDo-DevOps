@@ -141,6 +141,26 @@ class UserControllerValidationTest {
     }
 
     @Test
+    void listUsersShouldRejectNegativePage() throws Exception {
+        mockMvc.perform(get("/api/users").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("page must be greater than or equal to 0")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+
+        verifyNoInteractions(listUsersUseCase);
+    }
+
+    @Test
+    void listUsersShouldRejectTooLargePageSize() throws Exception {
+        mockMvc.perform(get("/api/users").param("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("size must be between 1 and 100")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+
+        verifyNoInteractions(listUsersUseCase);
+    }
+
+    @Test
     void createUserShouldRejectNonPositiveTelegramChatIdBeforeUseCase() throws Exception {
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)

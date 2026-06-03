@@ -1,6 +1,7 @@
 package com.example.todo.application.service;
 
 import com.example.todo.application.factory.ReminderNotificationFactory;
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.policy.ReminderDeliveryPolicy;
 import com.example.todo.application.policy.ReminderFailureReasonPolicy;
 import com.example.todo.application.policy.ReminderLifecyclePolicy;
@@ -136,14 +137,9 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
 
     @Override
     public ReminderProcessingReport processDueReminders(Instant now) {
-        Objects.requireNonNull(now, "now must not be null");
+        Instant actualNow = requireNonNull(now, "now");
 
-        List<Reminder> reminders = claimDueRemindersPort.claimDueReminders(
-                now,
-                processingTimeout,
-                batchSize,
-                reminder -> reminderLifecyclePolicy.markProcessing(reminder, processorId, now)
-        );
+        List<Reminder> reminders = claimReminders(actualNow);
         if (reminders.isEmpty()) {
             return ReminderProcessingReport.empty();
         }
@@ -154,7 +150,7 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
         int concurrencyConflictCount = 0;
 
         for (Reminder reminder : reminders) {
-            ReminderProcessingOutcome outcome = processReminder(reminder, now);
+            ReminderProcessingOutcome outcome = processReminder(reminder, actualNow);
             switch (outcome) {
                 case DELIVERED -> deliveredCount++;
                 case RETRIED -> retriedCount++;
@@ -169,6 +165,15 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
                 retriedCount,
                 failedCount,
                 concurrencyConflictCount
+        );
+    }
+
+    private List<Reminder> claimReminders(Instant now) {
+        return claimDueRemindersPort.claimDueReminders(
+                now,
+                processingTimeout,
+                batchSize,
+                reminder -> reminderLifecyclePolicy.markProcessing(reminder, processorId, now)
         );
     }
 
@@ -240,25 +245,32 @@ public class ScanDueRemindersService implements ScanDueRemindersUseCase {
 
     private static int requirePositive(int value, String fieldName) {
         if (value < 1) {
-            throw new IllegalArgumentException(fieldName + " must be at least 1");
+            throw new ApplicationValidationException(fieldName + " must be at least 1");
         }
         return value;
     }
 
     private static Duration requirePositive(Duration value, String fieldName) {
-        Duration actualValue = Objects.requireNonNull(value, fieldName + " must not be null");
+        Duration actualValue = requireNonNull(value, fieldName);
         if (actualValue.isNegative() || actualValue.isZero()) {
-            throw new IllegalArgumentException(fieldName + " must be positive");
+            throw new ApplicationValidationException(fieldName + " must be positive");
         }
         return actualValue;
     }
 
     private static String requireText(String value, String fieldName) {
-        String actualValue = Objects.requireNonNull(value, fieldName + " must not be null");
+        String actualValue = requireNonNull(value, fieldName);
         if (actualValue.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
+            throw new ApplicationValidationException(fieldName + " must not be blank");
         }
         return actualValue;
+    }
+
+    private static <T> T requireNonNull(T value, String fieldName) {
+        if (value == null) {
+            throw new ApplicationValidationException(fieldName + " must not be null");
+        }
+        return value;
     }
 
     private enum ReminderProcessingOutcome {

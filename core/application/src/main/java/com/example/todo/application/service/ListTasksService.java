@@ -1,5 +1,6 @@
 package com.example.todo.application.service;
 
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.port.in.ListTasksUseCase;
 import com.example.todo.application.port.out.LoadAllTasksPort;
 import com.example.todo.application.query.PageQuery;
@@ -19,6 +20,13 @@ public class ListTasksService implements ListTasksUseCase {
 
     @Override
     public PageResult<Task> listTasks(PageQuery pageQuery, TaskStatus status, TaskPriority priority) {
-        return loadAllTasksPort.load(Objects.requireNonNull(pageQuery, "pageQuery must not be null"), status, priority);
+        return loadAllTasksPort.load(requireNonNull(pageQuery, "pageQuery"), status, priority);
+    }
+
+    private static <T> T requireNonNull(T value, String fieldName) {
+        if (value == null) {
+            throw new ApplicationValidationException(fieldName + " must not be null");
+        }
+        return value;
     }
 }

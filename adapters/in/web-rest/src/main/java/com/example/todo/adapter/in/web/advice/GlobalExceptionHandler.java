@@ -7,6 +7,8 @@ import com.example.todo.application.exception.InvalidStateTransitionException;
 import com.example.todo.application.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.core.MethodParameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -14,7 +16,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -76,6 +80,22 @@ public class GlobalExceptionHandler {
                         violation.getMessage()
                 ))
         );
+
+        return build(HttpStatus.BAD_REQUEST, "validation failed", request, validationErrors);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiError> handleHandlerMethodValidation(
+            HandlerMethodValidationException ex,
+            HttpServletRequest request
+    ) {
+        List<ApiError.ValidationError> validationErrors = new ArrayList<>();
+        ex.getParameterValidationResults().forEach(result -> {
+            String field = parameterName(result.getMethodParameter());
+            for (MessageSourceResolvable error : result.getResolvableErrors()) {
+                validationErrors.add(new ApiError.ValidationError(field, error.getDefaultMessage()));
+            }
+        });
 
         return build(HttpStatus.BAD_REQUEST, "validation failed", request, validationErrors);
     }
@@ -143,5 +163,20 @@ public class GlobalExceptionHandler {
             return path;
         }
         return path.substring(separator + 1);
+    }
+
+    private static String parameterName(MethodParameter methodParameter) {
+        RequestParam requestParam = methodParameter.getParameterAnnotation(RequestParam.class);
+        if (requestParam != null) {
+            if (!requestParam.name().isBlank()) {
+                return requestParam.name();
+            }
+            if (!requestParam.value().isBlank()) {
+                return requestParam.value();
+            }
+        }
+
+        String parameterName = methodParameter.getParameterName();
+        return parameterName == null ? "arg" + methodParameter.getParameterIndex() : parameterName;
     }
 }

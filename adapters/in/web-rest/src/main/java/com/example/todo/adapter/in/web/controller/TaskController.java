@@ -14,6 +14,8 @@ import com.example.todo.application.port.in.ListTasksUseCase;
 import com.example.todo.application.query.PageQuery;
 import com.example.todo.domain.task.TaskId;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -52,8 +54,8 @@ public class TaskController {
 
     @GetMapping
     public PageResponse<TaskResponse> listTasks(
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "page", defaultValue = "0") @Min(0) int page,
+            @RequestParam(name = "size", defaultValue = "20") @Min(1) @Max(100) int size,
             @RequestParam(name = "sort", required = false) String sort,
             @RequestParam(name = "status", required = false) TaskStatusDto status,
             @RequestParam(name = "priority", required = false) TaskPriorityDto priority

@@ -92,7 +92,7 @@ public class ReminderPersistenceAdapter implements
                 "Finalize reminder delivery",
                 () -> repository.findForUpdateByIdAndStatusAndProcessingOwner(
                                 actualReminder.getId().value(),
-                                ReminderStatus.PROCESSING.name(),
+                                ReminderStatus.PROCESSING,
                                 processorId
                         )
                         .map(lockedReminder -> {
@@ -108,7 +108,7 @@ public class ReminderPersistenceAdapter implements
         if (status == null) {
             return repository.findByTaskId(taskId.value(), pageable);
         }
-        return repository.findByTaskIdAndStatus(taskId.value(), status.name(), pageable);
+        return repository.findByTaskIdAndStatus(taskId.value(), status, pageable);
     }
 
     private static PageResult<Reminder> toPageResult(Page<ReminderJpaEntity> page) {

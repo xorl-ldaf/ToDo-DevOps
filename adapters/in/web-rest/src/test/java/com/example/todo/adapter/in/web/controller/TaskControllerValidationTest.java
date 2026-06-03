@@ -125,6 +125,24 @@ class TaskControllerValidationTest {
     }
 
     @Test
+    void createTaskShouldReturnBadRequestForMalformedJsonBody() throws Exception {
+        mockMvc.perform(post("/api/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "Write tests",
+                                  "authorId": "11111111-1111-1111-1111-111111111111",
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.message", is("request body is malformed or contains invalid enum/date value")))
+                .andExpect(jsonPath("$.path", is("/api/tasks")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+        verifyNoInteractions(createTaskUseCase);
+    }
+
+    @Test
     void assignTaskShouldReturnFieldErrorForMissingAssignee() throws Exception {
         mockMvc.perform(patch("/api/tasks/{taskId}/assign", TASK_UUID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -188,6 +206,16 @@ class TaskControllerValidationTest {
         mockMvc.perform(get("/api/tasks").param("size", "101"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", is("size must be between 1 and 100")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+
+        verifyNoInteractions(listTasksUseCase);
+    }
+
+    @Test
+    void listTasksShouldRejectNegativePage() throws Exception {
+        mockMvc.perform(get("/api/tasks").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("page must be greater than or equal to 0")))
                 .andExpect(jsonPath("$.validationErrors", hasSize(0)));
 
         verifyNoInteractions(listTasksUseCase);

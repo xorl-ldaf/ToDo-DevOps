@@ -26,7 +26,7 @@ class ReminderPersistenceMapperTest {
         assertThat(entity.getId()).isEqualTo(reminder.getId().value());
         assertThat(entity.getTaskId()).isEqualTo(reminder.getTaskId().value());
         assertThat(entity.getRemindAt()).isEqualTo(reminder.getRemindAt());
-        assertThat(entity.getStatus()).isEqualTo(reminder.getStatus().name());
+        assertThat(entity.getStatus()).isEqualTo(reminder.getStatus());
         assertThat(entity.getCreatedAt()).isEqualTo(reminder.getCreatedAt());
         assertThat(entity.getUpdatedAt()).isEqualTo(reminder.getUpdatedAt());
         assertThat(entity.getNextAttemptAt()).isEqualTo(reminder.getNextAttemptAt());
@@ -42,12 +42,12 @@ class ReminderPersistenceMapperTest {
     void toJpaShouldStoreEveryReminderStatusAsDatabaseValue(ReminderStatus status) {
         ReminderJpaEntity entity = ReminderPersistenceMapper.toJpa(reminder(status));
 
-        assertThat(entity.getStatus()).isEqualTo(status.name());
+        assertThat(entity.getStatus()).isEqualTo(status);
     }
 
     @Test
     void toDomainShouldMapEveryDeliveredField() {
-        ReminderJpaEntity entity = deliveredReminderEntity(ReminderStatus.DELIVERED.name());
+        ReminderJpaEntity entity = deliveredReminderEntity(ReminderStatus.DELIVERED);
 
         Reminder reminder = ReminderPersistenceMapper.toDomain(entity);
 
@@ -68,18 +68,9 @@ class ReminderPersistenceMapperTest {
     @ParameterizedTest
     @EnumSource(ReminderStatus.class)
     void toDomainShouldReadEveryReminderStatusDatabaseValue(ReminderStatus status) {
-        Reminder reminder = ReminderPersistenceMapper.toDomain(reminderEntity(status.name()));
+        Reminder reminder = ReminderPersistenceMapper.toDomain(reminderEntity(status));
 
         assertThat(reminder.getStatus()).isEqualTo(status);
-    }
-
-    @Test
-    void toDomainShouldFailClearlyForUnknownReminderStatusDatabaseValue() {
-        ReminderJpaEntity entity = reminderEntity("UNKNOWN");
-
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> ReminderPersistenceMapper.toDomain(entity))
-                .withMessage("Unknown reminder status persistence value: UNKNOWN");
     }
 
     @Test
@@ -88,7 +79,16 @@ class ReminderPersistenceMapperTest {
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ReminderPersistenceMapper.toDomain(entity))
-                .withMessage("Reminder status persistence value must not be null");
+                .withMessage("status must not be null");
+    }
+
+    @Test
+    void shouldRoundTripReminderWithoutLosingFields() {
+        Reminder reminder = processingReminder();
+
+        Reminder roundTrip = ReminderPersistenceMapper.toDomain(ReminderPersistenceMapper.toJpa(reminder));
+
+        assertThat(roundTrip).isEqualTo(reminder);
     }
 
     private Reminder processingReminder() {
@@ -114,7 +114,7 @@ class ReminderPersistenceMapperTest {
         );
     }
 
-    private ReminderJpaEntity deliveredReminderEntity(String status) {
+    private ReminderJpaEntity deliveredReminderEntity(ReminderStatus status) {
         Instant createdAt = Instant.parse("2026-05-12T09:00:00Z");
         Instant deliveredAt = Instant.parse("2026-05-12T10:05:00Z");
         ReminderJpaEntity entity = reminderEntity(status);
@@ -128,7 +128,7 @@ class ReminderPersistenceMapperTest {
         return entity;
     }
 
-    private ReminderJpaEntity reminderEntity(String status) {
+    private ReminderJpaEntity reminderEntity(ReminderStatus status) {
         Instant createdAt = Instant.parse("2026-05-12T09:00:00Z");
         Instant processingStartedAt = Instant.parse("2026-05-12T10:01:00Z");
         ReminderJpaEntity entity = new ReminderJpaEntity();

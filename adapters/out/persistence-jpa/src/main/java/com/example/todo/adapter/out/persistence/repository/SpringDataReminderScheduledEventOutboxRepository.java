@@ -1,7 +1,10 @@
 package com.example.todo.adapter.out.persistence.repository;
 
 import com.example.todo.adapter.out.persistence.entity.ReminderScheduledEventOutboxJpaEntity;
+import com.example.todo.adapter.out.persistence.entity.ReminderScheduledEventOutboxStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -36,20 +39,17 @@ public interface SpringDataReminderScheduledEventOutboxRepository
             @Param("limit") int limit
     );
 
-    @Query(
-            value = """
-                    select *
-                    from reminder_scheduled_event_outbox
-                    where event_id = :eventId
-                      and status = :status
-                      and processing_owner = :processingOwner
-                    for update
-                    """,
-            nativeQuery = true
-    )
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select message
+            from ReminderScheduledEventOutboxJpaEntity message
+            where message.eventId = :eventId
+              and message.status = :status
+              and message.processingOwner = :processingOwner
+            """)
     Optional<ReminderScheduledEventOutboxJpaEntity> findForUpdateByEventIdAndStatusAndProcessingOwner(
             @Param("eventId") UUID eventId,
-            @Param("status") String status,
+            @Param("status") ReminderScheduledEventOutboxStatus status,
             @Param("processingOwner") String processingOwner
     );
 }

@@ -1,5 +1,6 @@
 package com.example.todo.application.service;
 
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.port.in.ListUsersUseCase;
 import com.example.todo.application.port.out.LoadAllUsersPort;
 import com.example.todo.application.query.PageQuery;
@@ -17,6 +18,13 @@ public class ListUsersService implements ListUsersUseCase {
 
     @Override
     public PageResult<User> listUsers(PageQuery pageQuery) {
-        return loadAllUsersPort.load(Objects.requireNonNull(pageQuery, "pageQuery must not be null"));
+        return loadAllUsersPort.load(requireNonNull(pageQuery, "pageQuery"));
+    }
+
+    private static <T> T requireNonNull(T value, String fieldName) {
+        if (value == null) {
+            throw new ApplicationValidationException(fieldName + " must not be null");
+        }
+        return value;
     }
 }

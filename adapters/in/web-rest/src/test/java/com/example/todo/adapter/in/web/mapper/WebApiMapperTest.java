@@ -4,6 +4,7 @@ import com.example.todo.adapter.in.web.dto.AssignTaskRequest;
 import com.example.todo.adapter.in.web.dto.CreateReminderRequest;
 import com.example.todo.adapter.in.web.dto.CreateTaskRequest;
 import com.example.todo.adapter.in.web.dto.CreateUserRequest;
+import com.example.todo.adapter.in.web.dto.PageResponse;
 import com.example.todo.adapter.in.web.dto.ReminderResponse;
 import com.example.todo.adapter.in.web.dto.ReminderStatusDto;
 import com.example.todo.adapter.in.web.dto.TaskPriorityDto;
@@ -14,6 +15,7 @@ import com.example.todo.application.command.AssignTaskCommand;
 import com.example.todo.application.command.CreateReminderCommand;
 import com.example.todo.application.command.CreateTaskCommand;
 import com.example.todo.application.command.CreateUserCommand;
+import com.example.todo.application.query.PageResult;
 import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderId;
 import com.example.todo.domain.reminder.ReminderStatus;
@@ -29,6 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,6 +65,27 @@ class WebApiMapperTest {
         assertThat(command.assigneeId()).isNull();
         assertThat(command.priority()).isNull();
         assertThat(command.dueAt()).isNull();
+    }
+
+    @Test
+    void createTaskRequestShouldMapEveryCommandField() {
+        CreateTaskRequest request = new CreateTaskRequest(
+                "Write mapper tests",
+                "coverage",
+                AUTHOR_UUID,
+                ASSIGNEE_UUID,
+                TaskPriorityDto.HIGH,
+                DUE_AT
+        );
+
+        CreateTaskCommand command = WebApiMapper.toCommand(request);
+
+        assertThat(command.title()).isEqualTo("Write mapper tests");
+        assertThat(command.description()).isEqualTo("coverage");
+        assertThat(command.authorId()).isEqualTo(new UserId(AUTHOR_UUID));
+        assertThat(command.assigneeId()).isEqualTo(new UserId(ASSIGNEE_UUID));
+        assertThat(command.priority()).isEqualTo(TaskPriority.HIGH);
+        assertThat(command.dueAt()).isEqualTo(DUE_AT);
     }
 
     @ParameterizedTest
@@ -186,6 +210,26 @@ class WebApiMapperTest {
         assertThat(response.createdAt()).isEqualTo(CREATED_AT);
         assertThat(response.updatedAt()).isEqualTo(UPDATED_AT);
         assertThat(response.deliveredAt()).isEqualTo(UPDATED_AT);
+    }
+
+    @Test
+    void pageResponseShouldMapPageMetadataAndItems() {
+        Task task = task(TaskStatus.IN_PROGRESS, TaskPriority.HIGH);
+
+        PageResponse<TaskResponse> response = WebApiMapper.toResponse(
+                new PageResult<>(List.of(task), 2, 20, 41, 3),
+                WebApiMapper::toResponse
+        );
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.id()).isEqualTo(TASK_UUID);
+            assertThat(item.status()).isEqualTo(TaskStatusDto.IN_PROGRESS);
+            assertThat(item.priority()).isEqualTo(TaskPriorityDto.HIGH);
+        });
+        assertThat(response.page()).isEqualTo(2);
+        assertThat(response.size()).isEqualTo(20);
+        assertThat(response.totalElements()).isEqualTo(41);
+        assertThat(response.totalPages()).isEqualTo(3);
     }
 
     private static Task task(TaskStatus status, TaskPriority priority) {

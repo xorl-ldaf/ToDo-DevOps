@@ -1,5 +1,6 @@
 package com.example.todo.application.service;
 
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.port.in.ReminderProcessingReport;
 import com.example.todo.application.port.out.ClaimDueRemindersPort;
 import com.example.todo.application.port.out.DeliverReminderNotificationPort;
@@ -132,8 +133,8 @@ class ScanDueRemindersServiceTest {
 
     @Test
     void processDueRemindersShouldValidateNow() {
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
                 () -> service.processDueReminders(null)
         );
 

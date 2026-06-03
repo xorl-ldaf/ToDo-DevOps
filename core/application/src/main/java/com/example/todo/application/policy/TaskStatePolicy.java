@@ -13,23 +13,14 @@ public class TaskStatePolicy {
     public Task assign(Task task, UserId newAssigneeId, Instant now) {
         Task actualTask = requireNonNull(task, "task");
 
-        if (actualTask.status() == TaskStatus.DONE || actualTask.status() == TaskStatus.CANCELLED) {
-            throw new InvalidStateTransitionException(
-                    "task cannot be reassigned from status: " + actualTask.status()
-            );
-        }
-
         Instant actualNow = requireValidUpdateTime(actualTask, now);
-        TaskStatus nextStatus = actualTask.status() == TaskStatus.OPEN
-                ? TaskStatus.IN_PROGRESS
-                : actualTask.status();
-
-        return copyWith(
-                actualTask,
-                requireNonNull(newAssigneeId, "newAssigneeId"),
-                nextStatus,
-                actualNow
-        );
+        try {
+            return actualTask.assignTo(requireNonNull(newAssigneeId, "newAssigneeId"), actualNow);
+        } catch (IllegalStateException ex) {
+            throw new InvalidStateTransitionException(ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            throw new ApplicationValidationException(ex.getMessage());
+        }
     }
 
     public Task markCompleted(Task task, Instant now) {
@@ -73,6 +64,9 @@ public class TaskStatePolicy {
         Instant actualNow = requireNonNull(now, "now");
         if (actualNow.isBefore(task.createdAt())) {
             throw new ApplicationValidationException("updatedAt must not be before createdAt");
+        }
+        if (actualNow.isBefore(task.updatedAt())) {
+            throw new ApplicationValidationException("updatedAt must not move backwards");
         }
         return actualNow;
     }

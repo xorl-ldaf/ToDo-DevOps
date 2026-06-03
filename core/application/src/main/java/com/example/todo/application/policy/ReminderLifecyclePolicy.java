@@ -6,6 +6,7 @@ import com.example.todo.domain.reminder.Reminder;
 import com.example.todo.domain.reminder.ReminderStatus;
 
 import java.time.Instant;
+import java.util.function.Supplier;
 
 public class ReminderLifecyclePolicy {
 
@@ -18,138 +19,36 @@ public class ReminderLifecyclePolicy {
 
     public Reminder markProcessing(Reminder reminder, String processorId, Instant now) {
         Reminder actualReminder = requireNonNull(reminder, "reminder");
-        if (actualReminder.status() != ReminderStatus.SCHEDULED
-                && actualReminder.status() != ReminderStatus.PROCESSING) {
-            throw new InvalidStateTransitionException(
-                    "reminder cannot be claimed for processing from status: " + actualReminder.status()
-            );
-        }
-
-        Instant actualNow = requireValidUpdateTime(actualReminder, now);
-        return new Reminder(
-                actualReminder.id(),
-                actualReminder.taskId(),
-                actualReminder.remindAt(),
-                ReminderStatus.PROCESSING,
-                actualReminder.createdAt(),
-                actualNow,
-                actualReminder.nextAttemptAt(),
-                actualNow,
-                requireText(processorId, "processorId"),
-                actualReminder.deliveredAt(),
-                actualReminder.deliveryAttempts(),
-                null
-        );
+        return transition(() -> actualReminder.markProcessing(processorId, requireLifecycleValue(now, "now")));
     }
 
     public Reminder markDelivered(Reminder reminder, Instant now) {
         Reminder actualReminder = requireNonNull(reminder, "reminder");
-        if (actualReminder.status() != ReminderStatus.PROCESSING) {
-            throw new InvalidStateTransitionException(
-                    "reminder cannot be marked as delivered from status: " + actualReminder.status()
-            );
-        }
-
-        Instant actualNow = requireValidDeliveredTime(actualReminder, now);
-        return new Reminder(
-                actualReminder.id(),
-                actualReminder.taskId(),
-                actualReminder.remindAt(),
-                ReminderStatus.DELIVERED,
-                actualReminder.createdAt(),
-                actualNow,
-                actualReminder.nextAttemptAt(),
-                null,
-                null,
-                actualNow,
-                actualReminder.deliveryAttempts() + 1,
-                null
-        );
+        return transition(() -> actualReminder.markDelivered(requireLifecycleValue(now, "now")));
     }
 
     public Reminder reschedule(Reminder reminder, Instant now, Instant nextAttemptAt, String failureReason) {
         Reminder actualReminder = requireNonNull(reminder, "reminder");
-        if (actualReminder.status() != ReminderStatus.PROCESSING) {
-            throw new InvalidStateTransitionException(
-                    "reminder cannot be rescheduled from status: " + actualReminder.status()
-            );
-        }
-
-        Instant actualNow = requireValidUpdateTime(actualReminder, now);
-        Instant actualNextAttemptAt = requireLifecycleValue(nextAttemptAt, "nextAttemptAt");
-        if (actualNextAttemptAt.isBefore(actualNow)) {
-            throw new ApplicationValidationException("nextAttemptAt must not be before the current processing time");
-        }
-
-        return new Reminder(
-                actualReminder.id(),
-                actualReminder.taskId(),
-                actualReminder.remindAt(),
-                ReminderStatus.SCHEDULED,
-                actualReminder.createdAt(),
-                actualNow,
-                actualNextAttemptAt,
-                null,
-                null,
-                null,
-                actualReminder.deliveryAttempts() + 1,
-                requireText(failureReason, "failureReason")
-        );
+        return transition(() -> actualReminder.reschedule(
+                requireLifecycleValue(now, "now"),
+                nextAttemptAt,
+                failureReason
+        ));
     }
 
     public Reminder markFailed(Reminder reminder, Instant now, String failureReason) {
         Reminder actualReminder = requireNonNull(reminder, "reminder");
-        if (actualReminder.status() != ReminderStatus.PROCESSING) {
-            throw new InvalidStateTransitionException(
-                    "reminder cannot be marked as failed from status: " + actualReminder.status()
-            );
-        }
-
-        Instant actualNow = requireValidUpdateTime(actualReminder, now);
-        return new Reminder(
-                actualReminder.id(),
-                actualReminder.taskId(),
-                actualReminder.remindAt(),
-                ReminderStatus.FAILED,
-                actualReminder.createdAt(),
-                actualNow,
-                actualReminder.nextAttemptAt(),
-                null,
-                null,
-                null,
-                actualReminder.deliveryAttempts() + 1,
-                requireText(failureReason, "failureReason")
-        );
+        return transition(() -> actualReminder.markFailed(requireLifecycleValue(now, "now"), failureReason));
     }
 
-    private static Instant requireValidUpdateTime(Reminder reminder, Instant now) {
-        Instant actualNow = requireLifecycleValue(now, "now");
-        if (actualNow.isBefore(reminder.createdAt())) {
-            throw new ApplicationValidationException("updatedAt must not be before createdAt");
+    private static Reminder transition(Supplier<Reminder> transition) {
+        try {
+            return transition.get();
+        } catch (IllegalStateException ex) {
+            throw new InvalidStateTransitionException(ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            throw new ApplicationValidationException(ex.getMessage());
         }
-        if (actualNow.isBefore(reminder.updatedAt())) {
-            throw new ApplicationValidationException("updatedAt must not move backwards");
-        }
-        return actualNow;
-    }
-
-    private static Instant requireValidDeliveredTime(Reminder reminder, Instant now) {
-        Instant actualNow = requireLifecycleValue(now, "now");
-        if (actualNow.isBefore(reminder.createdAt())) {
-            throw new ApplicationValidationException("deliveredAt must not be before createdAt");
-        }
-        if (actualNow.isBefore(reminder.updatedAt())) {
-            throw new ApplicationValidationException("updatedAt must not move backwards");
-        }
-        return actualNow;
-    }
-
-    private static String requireText(String value, String fieldName) {
-        String actualValue = requireLifecycleValue(value, fieldName);
-        if (actualValue.isBlank()) {
-            throw new ApplicationValidationException(fieldName + " must not be blank");
-        }
-        return actualValue;
     }
 
     private static <T> T requireNonNull(T value, String fieldName) {

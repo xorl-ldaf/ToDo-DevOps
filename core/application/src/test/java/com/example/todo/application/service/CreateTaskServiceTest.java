@@ -145,7 +145,6 @@ class CreateTaskServiceTest {
     @Test
     void createTaskShouldRejectBlankTitleWithoutSavingTask() {
         UserId authorId = userId("11111111-1111-1111-1111-111111111111");
-        when(loadUserPort.existsById(authorId)).thenReturn(true);
 
         ApplicationValidationException exception = assertThrows(
                 ApplicationValidationException.class,
@@ -153,8 +152,7 @@ class CreateTaskServiceTest {
         );
 
         assertEquals("title must not be blank", exception.getMessage());
-        verify(loadUserPort).existsById(authorId);
-        verifyNoMoreInteractions(loadUserPort);
+        verifyNoInteractions(loadUserPort);
         verifyNoInteractions(saveTaskPort);
     }
 

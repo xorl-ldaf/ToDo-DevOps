@@ -48,7 +48,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class ReminderOutboxIntegrationTest {
 
     private static final Instant NOW = Instant.parse("2026-04-21T10:00:00Z");
-    private static final Instant REMIND_AT = Instant.parse("2026-04-21T12:00:00Z");
+    private static final Instant REMIND_AT = Instant.parse("2099-04-21T12:00:00Z");
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");

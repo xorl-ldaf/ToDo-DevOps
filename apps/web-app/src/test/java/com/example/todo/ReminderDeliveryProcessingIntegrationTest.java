@@ -54,7 +54,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class ReminderDeliveryProcessingIntegrationTest {
 
     private static final Instant INITIAL_TIME = Instant.parse("2026-04-21T10:00:00Z");
-    private static final Instant REMIND_AT = Instant.parse("2026-04-21T10:30:00Z");
+    private static final Instant REMIND_AT = Instant.parse("2099-04-21T10:30:00Z");
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");

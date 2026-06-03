@@ -47,7 +47,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @ActiveProfiles("test")
 class ReminderTelegramIntegrationTest {
     private static final Instant INITIAL_TIME = Instant.parse("2026-04-21T10:00:00Z");
-    private static final Instant REMIND_AT = Instant.parse("2026-04-21T10:30:00Z");
+    private static final Instant REMIND_AT = Instant.parse("2099-04-21T10:30:00Z");
     private static final LinkedBlockingQueue<String> TELEGRAM_REQUEST_BODIES = new LinkedBlockingQueue<>();
     private static volatile HttpServer telegramServer;
 

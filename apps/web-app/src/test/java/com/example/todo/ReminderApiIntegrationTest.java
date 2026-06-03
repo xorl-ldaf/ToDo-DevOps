@@ -43,8 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ReminderApiIntegrationTest {
 
     private static final Instant INITIAL_TIME = Instant.parse("2026-01-10T09:00:00Z");
-    private static final Instant VALID_REMIND_AT = Instant.parse("2026-01-10T11:30:00Z");
-    private static final Instant SECOND_REMIND_AT = Instant.parse("2026-01-10T13:45:00Z");
+    private static final Instant VALID_REMIND_AT = Instant.parse("2099-01-10T11:30:00Z");
+    private static final Instant SECOND_REMIND_AT = Instant.parse("2099-01-10T13:45:00Z");
     private static final Instant PAST_REMIND_AT = Instant.parse("2026-01-10T08:59:59Z");
 
     @Container
@@ -193,8 +193,10 @@ class ReminderApiIntegrationTest {
                 .andExpect(jsonPath("$.timestamp", notNullValue()))
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
-                .andExpect(jsonPath("$.message", is("remindAt must not be in the past")))
-                .andExpect(jsonPath("$.validationErrors", hasSize(0)));
+                .andExpect(jsonPath("$.message", is("validation failed")))
+                .andExpect(jsonPath("$.validationErrors", hasSize(1)))
+                .andExpect(jsonPath("$.validationErrors[0].field", is("remindAt")))
+                .andExpect(jsonPath("$.validationErrors[0].message").isString());
     }
 
     @Test

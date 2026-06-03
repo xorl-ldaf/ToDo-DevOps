@@ -104,6 +104,15 @@ class TaskPersistenceMapperTest {
                 .withMessageContaining("priority");
     }
 
+    @Test
+    void shouldRoundTripTaskWithoutLosingFields() {
+        Task task = task();
+
+        Task roundTrip = TaskPersistenceMapper.toDomain(TaskPersistenceMapper.toJpa(task));
+
+        assertThat(roundTrip).isEqualTo(task);
+    }
+
     private Task task() {
         return task(TaskStatus.IN_PROGRESS, TaskPriority.HIGH);
     }

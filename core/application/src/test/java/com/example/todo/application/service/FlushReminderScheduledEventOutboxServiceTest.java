@@ -1,6 +1,7 @@
 package com.example.todo.application.service;
 
 import com.example.todo.application.event.ReminderScheduledEventV1;
+import com.example.todo.application.exception.ApplicationValidationException;
 import com.example.todo.application.outbox.OutboxPublicationPolicy;
 import com.example.todo.application.outbox.OutboxPublicationPolicy.PublicationFailureDecision;
 import com.example.todo.application.outbox.ReminderScheduledEventOutboxMessage;
@@ -104,8 +105,8 @@ class FlushReminderScheduledEventOutboxServiceTest {
 
     @Test
     void flushShouldRejectNullNowBeforeCallingPorts() {
-        NullPointerException exception = assertThrows(
-                NullPointerException.class,
+        ApplicationValidationException exception = assertThrows(
+                ApplicationValidationException.class,
                 () -> service.flush(null)
         );
 
